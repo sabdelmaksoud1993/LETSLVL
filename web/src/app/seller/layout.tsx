@@ -211,17 +211,44 @@ export default function SellerLayout({
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar (mobile) */}
-        <header className="lg:hidden sticky top-0 z-30 bg-lvl-carbon/80 backdrop-blur-sm border-b border-lvl-slate/30 px-4 py-3 flex items-center gap-3">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="text-lvl-smoke hover:text-lvl-white transition-colors"
-            aria-label="Open sidebar"
-          >
-            <Menu className="w-6 h-6" />
-          </button>
-          <span className="font-display text-base font-bold tracking-wider text-lvl-yellow">
-            SELLER PANEL
-          </span>
+        <header className="lg:hidden sticky top-0 z-30 bg-lvl-carbon border-b border-lvl-slate/30">
+          <div className="px-4 py-3 flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="text-lvl-smoke hover:text-lvl-white transition-colors"
+              aria-label="Open sidebar"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+            <span className="font-display text-base font-bold tracking-wider text-lvl-yellow">
+              SELLER PANEL
+            </span>
+          </div>
+          {/* Quick nav tabs (always visible on mobile) */}
+          <nav className="flex gap-1 px-3 pb-2 overflow-x-auto">
+            {NAV_ITEMS.map((item) => {
+              const active = isActiveRoute(pathname, item.href);
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`
+                    flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-body font-medium
+                    whitespace-nowrap transition-colors shrink-0
+                    ${
+                      active
+                        ? "bg-lvl-yellow text-lvl-black"
+                        : "bg-lvl-slate/50 text-lvl-smoke hover:text-lvl-white"
+                    }
+                  `}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
         </header>
 
         {/* Page content */}
