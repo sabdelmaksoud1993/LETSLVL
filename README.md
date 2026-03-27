@@ -8,7 +8,7 @@ Fashion + Merchandise + Live Auctions | Dubai, UAE | 2025
 
 **Tech Stack:** Next.js 16 + TypeScript + Tailwind CSS v4 + Supabase + Stripe
 
-**Current Version:** v0.4.0 | [Releases](https://github.com/sabdelmaksoud1993/LETSLVL/releases)
+**Current Version:** v0.5.0 | [Releases](https://github.com/sabdelmaksoud1993/LETSLVL/releases)
 
 ---
 
@@ -16,6 +16,7 @@ Fashion + Merchandise + Live Auctions | Dubai, UAE | 2025
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.5.0** | 2026-03-27 | 30 products seeded, full-text search, web push notifications, Stripe Connect, React Native mobile app scaffold, PWA manifest |
 | **v0.4.0** | 2026-03-27 | Full Supabase wiring, Realtime auctions/chat, Stripe payments, Arabic/RTL, image upload |
 | **v0.3.0** | 2026-03-27 | Supabase backend (10 tables), real auth (signup/login/session), middleware |
 | **v0.2.0** | 2026-03-27 | Header/footer fix, Sign In/Up buttons, seller CRUD, analytics dashboard |
@@ -53,6 +54,25 @@ Copy `.env.example` to `.env.local` and fill in your Supabase and Stripe keys.
 | Arabic/RTL language support | Live |
 | Wishlist (user-tied, persistent) | Live |
 | Go Live (seller creates stream) | Live |
+| Full-text product search | Live |
+| Web push notifications | Live (PWA) |
+| Stripe Connect seller payouts | Live (dev mode) |
+| 30 products seeded in database | Live |
+| React Native mobile app | Scaffolded (Expo + 5 tabs) |
+
+---
+
+## Mobile App
+
+The React Native mobile app is in `mobile/` — built with Expo and expo-router.
+
+```bash
+cd mobile
+npm install
+npx expo start
+```
+
+5-tab layout: Home, Explore, LIVE, Wishlist, Account. Shares the same Supabase backend as the web app.
 
 ---
 

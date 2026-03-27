@@ -10,6 +10,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
+import { PayoutSetup } from "@/components/seller/payout-setup";
 
 const STATS = [
   {
@@ -264,6 +265,11 @@ export default function SellerDashboardPage() {
           </p>
         </div>
       </section>
+      {/* Payouts */}
+      <section className="mt-6">
+        <PayoutSetup />
+      </section>
+
       {/* View Full Analytics */}
       <Link href="/seller/analytics" className="block mt-6">
         <div className="bg-lvl-carbon rounded-xl p-4 flex items-center gap-4 hover:ring-1 hover:ring-lvl-yellow/40 transition-all group">

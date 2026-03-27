@@ -1,0 +1,10 @@
+Replace with LVL branded icons (192x192 and 512x512 PNG)
+
+Required files:
+- icon-192.png  (192x192 px, PNG format)
+- icon-512.png  (512x512 px, PNG format)
+- badge-72.png  (72x72 px, PNG format, used as notification badge)
+
+These icons are referenced by:
+- /public/manifest.json (PWA manifest)
+- /public/sw.js (push notification icon and badge)
