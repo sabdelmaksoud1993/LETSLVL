@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Oswald, Poppins } from "next/font/google";
-import { Header } from "@/components/layout/header";
-import { Footer } from "@/components/layout/footer";
-import { BottomNav } from "@/components/layout/bottom-nav";
+import { SiteShell } from "@/components/layout/site-shell";
 import { AuthProvider } from "@/lib/auth-context";
 import { LocaleProvider } from "@/lib/locale-context";
 import "./globals.css";
@@ -54,10 +52,7 @@ export default function RootLayout({
       <body className="bg-lvl-black text-lvl-white font-body antialiased">
         <AuthProvider>
           <LocaleProvider>
-            <Header />
-            <main className="min-h-screen">{children}</main>
-            <Footer />
-            <BottomNav />
+            <SiteShell>{children}</SiteShell>
           </LocaleProvider>
         </AuthProvider>
       </body>

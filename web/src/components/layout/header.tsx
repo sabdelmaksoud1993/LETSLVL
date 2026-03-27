@@ -12,6 +12,7 @@ import {
   LogOut,
   LayoutDashboard,
   ChevronDown,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getCartCount } from "@/lib/cart-store";
@@ -100,6 +101,17 @@ function UserMenu() {
             Seller Dashboard
           </Link>
 
+          {profile?.role === "admin" && (
+            <Link
+              href="/admin"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-3 px-4 py-2.5 text-sm font-body text-lvl-yellow hover:text-lvl-yellow hover:bg-lvl-yellow/10 transition-colors"
+            >
+              <Shield size={16} />
+              Admin Panel
+            </Link>
+          )}
+
           <div className="border-t border-lvl-slate/30 mt-1">
             <button
               type="button"
@@ -122,7 +134,7 @@ function UserMenu() {
 function Header() {
   const [cartCount, setCartCount] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, loading, signOut } = useAuth();
+  const { user, profile, loading, signOut } = useAuth();
 
   const syncCartCount = useCallback(() => {
     setCartCount(getCartCount());
@@ -275,6 +287,16 @@ function Header() {
                     <LayoutDashboard size={18} />
                     Seller Dashboard
                   </Link>
+                  {profile?.role === "admin" && (
+                    <Link
+                      href="/admin"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-3 py-3 rounded-lg border border-lvl-yellow/50 text-lvl-yellow font-display uppercase tracking-wider hover:border-lvl-yellow transition-colors justify-center"
+                    >
+                      <Shield size={18} />
+                      Admin Panel
+                    </Link>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
