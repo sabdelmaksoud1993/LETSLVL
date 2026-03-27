@@ -77,7 +77,7 @@ function AppContent() {
           ]}
         >
           <Animated.Text style={[splashStyles.logoLets, { opacity: pulseAnim }]}>
-            LET&apos;S
+            {"LET'S"}
           </Animated.Text>
           <Animated.Text style={[splashStyles.logoLvl, { opacity: pulseAnim }]}>
             LVL
