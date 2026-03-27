@@ -13,6 +13,7 @@ import {
   Radio,
   AlertTriangle,
   Settings,
+  Tag,
   Menu,
   X,
   LogOut,
@@ -32,6 +33,7 @@ const NAV_ITEMS: readonly NavItem[] = [
   { label: "Orders", href: "/admin/orders", icon: ShoppingBag },
   { label: "Products", href: "/admin/products", icon: Package },
   { label: "Streams", href: "/admin/streams", icon: Radio },
+  { label: "Promo Codes", href: "/admin/promos", icon: Tag },
   { label: "Disputes", href: "/admin/disputes", icon: AlertTriangle },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ] as const;

@@ -11,7 +11,8 @@ interface PlatformSettings {
   readonly liveAuctions: boolean;
   readonly codEnabled: boolean;
   readonly tabbyBnpl: boolean;
-  readonly commissionRate: number;
+  readonly commissionProducts: number;
+  readonly commissionAuctions: number;
   readonly shippingRegions: Record<string, boolean>;
   readonly freeShippingThreshold: number;
 }
@@ -20,7 +21,8 @@ const DEFAULT_SETTINGS: PlatformSettings = {
   liveAuctions: true,
   codEnabled: true,
   tabbyBnpl: true,
-  commissionRate: 10,
+  commissionProducts: 10,
+  commissionAuctions: 15,
   shippingRegions: {
     UAE: true,
     KSA: true,
@@ -204,29 +206,73 @@ export default function AdminSettingsPage() {
         />
       </section>
 
-      {/* Commission Rate */}
+      {/* Commission Rates — Split */}
       <section className="bg-lvl-carbon rounded-xl border border-lvl-slate/30 p-6">
         <h2 className="font-display text-lg font-bold text-lvl-white mb-4 flex items-center gap-2">
           <Percent className="w-5 h-5 text-lvl-yellow" />
-          Commission Rate
+          Commission Rates
         </h2>
-        <div className="space-y-3">
+
+        {/* Standard Products */}
+        <div className="space-y-3 mb-6 pb-6 border-b border-lvl-slate/20">
           <div className="flex items-center justify-between">
-            <span className="font-body text-sm text-lvl-smoke">
-              Platform commission on each sale
-            </span>
+            <div>
+              <span className="font-body text-sm text-lvl-white font-medium">
+                Standard Products
+              </span>
+              <p className="font-body text-xs text-lvl-smoke mt-0.5">
+                Commission on regular product sales via the shop
+              </p>
+            </div>
             <span className="font-display text-xl font-bold text-lvl-yellow">
-              {settings.commissionRate}%
+              {settings.commissionProducts}%
             </span>
           </div>
           <input
             type="range"
             min={0}
             max={30}
-            step={1}
-            value={settings.commissionRate}
+            step={0.5}
+            value={settings.commissionProducts}
             onChange={(e) =>
-              updateSetting("commissionRate", Number(e.target.value))
+              updateSetting("commissionProducts", Number(e.target.value))
+            }
+            className="w-full h-2 rounded-full appearance-none cursor-pointer bg-lvl-slate accent-lvl-yellow"
+          />
+          <div className="flex justify-between font-body text-xs text-lvl-smoke">
+            <span>0%</span>
+            <span>15%</span>
+            <span>30%</span>
+          </div>
+        </div>
+
+        {/* Live Auctions */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="font-body text-sm text-lvl-white font-medium flex items-center gap-2">
+                Live Auctions
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 text-xs font-body">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                  LIVE
+                </span>
+              </span>
+              <p className="font-body text-xs text-lvl-smoke mt-0.5">
+                Commission on items sold through live stream auctions
+              </p>
+            </div>
+            <span className="font-display text-xl font-bold text-lvl-yellow">
+              {settings.commissionAuctions}%
+            </span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={30}
+            step={0.5}
+            value={settings.commissionAuctions}
+            onChange={(e) =>
+              updateSetting("commissionAuctions", Number(e.target.value))
             }
             className="w-full h-2 rounded-full appearance-none cursor-pointer bg-lvl-slate accent-lvl-yellow"
           />

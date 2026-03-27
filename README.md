@@ -8,7 +8,7 @@ Fashion + Merchandise + Live Auctions | Dubai, UAE | 2025
 
 **Tech Stack:** Next.js 16 + TypeScript + Tailwind CSS v4 + Supabase + Stripe
 
-**Current Version:** v0.6.0 | [Releases](https://github.com/sabdelmaksoud1993/LETSLVL/releases)
+**Current Version:** v0.6.1 | [Releases](https://github.com/sabdelmaksoud1993/LETSLVL/releases)
 
 ---
 
@@ -16,6 +16,7 @@ Fashion + Merchandise + Live Auctions | Dubai, UAE | 2025
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.6.1** | 2026-03-27 | Promo codes management (CRUD + Supabase), split commission rates (products vs auctions) |
 | **v0.6.0** | 2026-03-27 | Full Admin Panel (8 pages), user/seller/order/product/stream management, disputes, platform settings |
 | **v0.5.0** | 2026-03-27 | 30 products seeded, full-text search, web push notifications, Stripe Connect, React Native mobile app scaffold, PWA manifest |
 | **v0.4.0** | 2026-03-27 | Full Supabase wiring, Realtime auctions/chat, Stripe payments, Arabic/RTL, image upload |
@@ -61,6 +62,8 @@ Copy `.env.example` to `.env.local` and fill in your Supabase and Stripe keys.
 | 30 products seeded in database | Live |
 | React Native mobile app | Scaffolded (Expo + 5 tabs) |
 | Admin Panel (overview, users, sellers, orders, products, streams, disputes, settings) | Live |
+| Promo codes management (create, activate/deactivate, track usage) | Live |
+| Split commission rates (standard products vs live auctions) | Live |
 
 ---
 
