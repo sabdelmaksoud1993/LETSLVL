@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius } from '../../theme';
+import { formatPrice } from '../../lib/utils';
 import {
   getCartFromStorage,
   saveCartToStorage,
@@ -128,10 +129,7 @@ export default function CartScreen() {
 
               <View style={styles.itemBottom}>
                 <Text style={styles.itemPrice}>
-                  $
-                  {(item.price * item.quantity).toLocaleString('en-US', {
-                    minimumFractionDigits: 2,
-                  })}
+                  {formatPrice(item.price * item.quantity)}
                 </Text>
 
                 <View style={styles.quantityControls}>
@@ -168,29 +166,20 @@ export default function CartScreen() {
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Subtotal</Text>
             <Text style={styles.summaryValue}>
-              $
-              {subtotal.toLocaleString('en-US', {
-                minimumFractionDigits: 2,
-              })}
+              {formatPrice(subtotal)}
             </Text>
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Shipping</Text>
             <Text style={styles.summaryValue}>
-              $
-              {shipping.toLocaleString('en-US', {
-                minimumFractionDigits: 2,
-              })}
+              {formatPrice(shipping)}
             </Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.summaryRow}>
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>
-              $
-              {total.toLocaleString('en-US', {
-                minimumFractionDigits: 2,
-              })}
+              {formatPrice(total)}
             </Text>
           </View>
         </View>

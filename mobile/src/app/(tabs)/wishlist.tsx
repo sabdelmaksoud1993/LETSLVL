@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius } from '../../theme';
+import { formatPrice } from '../../lib/utils';
 import { useAuth } from '../../lib/auth-context';
 import {
   getWishlist,
@@ -27,12 +28,12 @@ const CARD_WIDTH = (SCREEN_WIDTH - spacing.md * 3) / 2;
 
 // Fallback mock data for unauthenticated state
 const MOCK_WISHLIST = [
-  { id: '1', title: 'Air Jordan 1 Retro High OG', brand: 'Nike', price: 189.99, images: [] },
-  { id: '2', title: 'Box Logo Hoodie FW24', brand: 'Supreme', price: 348.0, images: [] },
-  { id: '3', title: 'Yeezy Slide Onyx', brand: 'Adidas', price: 129.99, images: [] },
-  { id: '4', title: 'Submariner Date', brand: 'Rolex', price: 14500.0, images: [] },
-  { id: '5', title: 'Essentials Hoodie', brand: 'Fear of God', price: 195.0, images: [] },
-  { id: '6', title: 'Classic Leather Belt', brand: 'Gucci', price: 450.0, images: [] },
+  { id: '1', title: 'Air Jordan 1 Retro High OG', brand: 'Nike', price: 699, image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop' },
+  { id: '2', title: 'Box Logo Hoodie FW24', brand: 'Supreme', price: 1279, image: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop' },
+  { id: '3', title: 'Yeezy Slide Onyx', brand: 'Adidas', price: 479, image: 'https://images.unsplash.com/photo-1587563871167-1ee9c731aefb?w=400&h=400&fit=crop' },
+  { id: '4', title: 'Submariner Date', brand: 'Rolex', price: 53200, image: 'https://images.unsplash.com/photo-1523170335258-f5ed11844a49?w=400&h=400&fit=crop' },
+  { id: '5', title: 'Essentials Hoodie', brand: 'Fear of God', price: 715, image: 'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=400&h=400&fit=crop' },
+  { id: '6', title: 'Classic Leather Belt', brand: 'Gucci', price: 1650, image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=400&fit=crop' },
 ];
 
 type WishlistDisplayItem = {
@@ -61,7 +62,7 @@ export default function WishlistScreen() {
           title: item.title,
           brand: item.brand,
           price: item.price,
-          image: null,
+          image: item.image ?? null,
         })),
       );
       setLoading(false);
@@ -174,7 +175,7 @@ export default function WishlistScreen() {
           {item.title}
         </Text>
         <Text style={styles.productPrice}>
-          ${item.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          {formatPrice(item.price)}
         </Text>
       </View>
     </TouchableOpacity>

@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { colors, spacing, borderRadius } from '../../theme';
+import { formatPrice } from '../../lib/utils';
 import { useAuth } from '../../lib/auth-context';
 import {
   getProduct,
@@ -34,7 +35,7 @@ const MOCK_PRODUCT = {
   id: '1',
   title: 'Air Jordan 1 Retro High OG',
   brand: 'Nike',
-  price: 189.99,
+  price: 699,
   images: [],
   sizes: ['US 7', 'US 8', 'US 9', 'US 10', 'US 11', 'US 12'],
   colors: ['Chicago', 'Bred', 'Royal', 'Shadow'],
@@ -275,17 +276,11 @@ export default function ProductDetailScreen() {
 
           <View style={styles.priceRow}>
             <Text style={styles.price}>
-              $
-              {product.price.toLocaleString('en-US', {
-                minimumFractionDigits: 2,
-              })}
+              {formatPrice(product.price)}
             </Text>
             {product.compare_at_price ? (
               <Text style={styles.comparePrice}>
-                $
-                {product.compare_at_price.toLocaleString('en-US', {
-                  minimumFractionDigits: 2,
-                })}
+                {formatPrice(product.compare_at_price)}
               </Text>
             ) : null}
           </View>

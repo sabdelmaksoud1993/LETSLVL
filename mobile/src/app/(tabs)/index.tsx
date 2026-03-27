@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,10 +10,13 @@ import {
   Dimensions,
   ActivityIndicator,
   Image,
+  Animated,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius } from '../../theme';
+import { formatPrice } from '../../lib/utils';
 import {
   getProducts,
   getCategories,
@@ -45,12 +48,12 @@ const MOCK_STREAMS = [
 ];
 
 const MOCK_PRODUCTS = [
-  { id: '1', title: 'Air Jordan 1 Retro High OG', brand: 'Nike', price: 189.99, images: [] },
-  { id: '2', title: 'Box Logo Hoodie FW24', brand: 'Supreme', price: 348.0, images: [] },
-  { id: '3', title: 'Classic Leather Belt', brand: 'Gucci', price: 450.0, images: [] },
-  { id: '4', title: 'Yeezy Slide Onyx', brand: 'Adidas', price: 129.99, images: [] },
-  { id: '5', title: 'Essentials Hoodie', brand: 'Fear of God', price: 195.0, images: [] },
-  { id: '6', title: 'Submariner Date', brand: 'Rolex', price: 14500.0, images: [] },
+  { id: '1', title: 'Air Jordan 1 Retro High OG', brand: 'Nike', price: 699, images: [] },
+  { id: '2', title: 'Box Logo Hoodie FW24', brand: 'Supreme', price: 1279, images: [] },
+  { id: '3', title: 'Classic Leather Belt', brand: 'Gucci', price: 1650, images: [] },
+  { id: '4', title: 'Yeezy Slide Onyx', brand: 'Adidas', price: 479, images: [] },
+  { id: '5', title: 'Essentials Hoodie', brand: 'Fear of God', price: 715, images: [] },
+  { id: '6', title: 'Submariner Date', brand: 'Rolex', price: 53200, images: [] },
 ];
 
 export default function HomeScreen() {
@@ -61,6 +64,16 @@ export default function HomeScreen() {
   const [categories, setCategories] = useState<readonly string[]>(MOCK_CATEGORIES);
   const [streams, setStreams] = useState<readonly (Stream | typeof MOCK_STREAMS[0])[]>(MOCK_STREAMS);
   const [products, setProducts] = useState<readonly (Product | typeof MOCK_PRODUCTS[0])[]>(MOCK_PRODUCTS);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const fadeIn = useCallback(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  }, [fadeAnim]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -86,8 +99,9 @@ export default function HomeScreen() {
       // Keep mock data as fallback
     } finally {
       setLoading(false);
+      fadeIn();
     }
-  }, []);
+  }, [fadeIn]);
 
   useEffect(() => {
     fetchData();
@@ -139,7 +153,7 @@ export default function HomeScreen() {
             {item.title}
           </Text>
           <Text style={styles.productPrice}>
-            ${item.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            {formatPrice(item.price)}
           </Text>
         </View>
       </TouchableOpacity>
@@ -175,7 +189,10 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.logo}>LET&apos;S LVL</Text>
-          <TouchableOpacity style={styles.searchButton}>
+          <TouchableOpacity
+            style={styles.searchButton}
+            onPress={() => Alert.alert('Search', 'Search coming soon')}
+          >
             <Text style={styles.searchIcon}>&#x1F50D;</Text>
           </TouchableOpacity>
         </View>
@@ -265,7 +282,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Trending Section */}
-        <View style={styles.section}>
+        <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>TRENDING</Text>
             <TouchableOpacity>
@@ -280,7 +297,7 @@ export default function HomeScreen() {
             columnWrapperStyle={styles.productRow}
             scrollEnabled={false}
           />
-        </View>
+        </Animated.View>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>

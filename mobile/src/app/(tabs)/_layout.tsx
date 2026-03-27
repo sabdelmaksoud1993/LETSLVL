@@ -2,15 +2,7 @@ import { Tabs } from 'expo-router';
 import { StyleSheet, View, Text } from 'react-native';
 import { colors } from '../../theme';
 
-function TabIcon({ name, focused }: { name: string; focused: boolean }) {
-  const icons: Record<string, string> = {
-    Home: '\u2302',
-    Live: '\u25CF',
-    Cart: '\uD83D\uDED2',
-    Wishlist: '\u2665',
-    Account: '\u263A',
-  };
-
+function TabIcon({ icon, label, focused }: { icon: string; label: string; focused: boolean }) {
   return (
     <View style={styles.tabIconContainer}>
       <Text
@@ -19,15 +11,16 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
           { color: focused ? colors.yellow : colors.smoke },
         ]}
       >
-        {icons[name] ?? '?'}
+        {icon}
       </Text>
       <Text
+        numberOfLines={1}
         style={[
           styles.tabLabel,
           { color: focused ? colors.yellow : colors.smoke },
         ]}
       >
-        {name}
+        {label}
       </Text>
     </View>
   );
@@ -48,7 +41,7 @@ export default function TabLayout() {
         name="index"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon name="Home" focused={focused} />
+            <TabIcon icon="⌂" label="Home" focused={focused} />
           ),
         }}
       />
@@ -56,7 +49,7 @@ export default function TabLayout() {
         name="live"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon name="Live" focused={focused} />
+            <TabIcon icon="📡" label="Live" focused={focused} />
           ),
         }}
       />
@@ -64,7 +57,7 @@ export default function TabLayout() {
         name="cart"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon name="Cart" focused={focused} />
+            <TabIcon icon="🛒" label="Cart" focused={focused} />
           ),
         }}
       />
@@ -72,7 +65,7 @@ export default function TabLayout() {
         name="wishlist"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon name="Wishlist" focused={focused} />
+            <TabIcon icon="♥" label="Wishlist" focused={focused} />
           ),
         }}
       />
@@ -80,7 +73,7 @@ export default function TabLayout() {
         name="account"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon name="Account" focused={focused} />
+            <TabIcon icon="👤" label="Account" focused={focused} />
           ),
         }}
       />
@@ -93,20 +86,22 @@ const styles = StyleSheet.create({
     backgroundColor: colors.carbon,
     borderTopColor: colors.slate,
     borderTopWidth: 1,
-    height: 80,
+    height: 85,
     paddingTop: 8,
+    paddingBottom: 20,
   },
   tabIconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    width: 60,
+    gap: 2,
   },
   tabIcon: {
-    fontSize: 20,
+    fontSize: 22,
   },
   tabLabel: {
     fontSize: 10,
     fontWeight: '600',
-    letterSpacing: 0.5,
+    textAlign: 'center',
   },
 });
