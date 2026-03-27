@@ -7,6 +7,7 @@ import {
   Radio,
   Edit,
   ChevronRight,
+  BarChart3,
 } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 
@@ -234,9 +235,17 @@ export default function SellerDashboardPage() {
 
       {/* Performance Chart Placeholder */}
       <section className="mt-6">
-        <h2 className="font-display text-lg font-bold tracking-wide mb-3">
-          Performance
-        </h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-display text-lg font-bold tracking-wide">
+            Performance
+          </h2>
+          <Link
+            href="/seller/analytics"
+            className="text-lvl-yellow text-xs font-body hover:underline flex items-center gap-1"
+          >
+            Full Analytics <ChevronRight className="w-3 h-3" />
+          </Link>
+        </div>
         <div className="bg-lvl-carbon rounded-xl p-6 h-48 flex items-center justify-center relative overflow-hidden">
           {/* Gradient bars to simulate chart */}
           <div className="absolute inset-0 flex items-end gap-2 px-6 pb-6">
@@ -255,6 +264,21 @@ export default function SellerDashboardPage() {
           </p>
         </div>
       </section>
+      {/* View Full Analytics */}
+      <Link href="/seller/analytics" className="block mt-6">
+        <div className="bg-lvl-carbon rounded-xl p-4 flex items-center gap-4 hover:ring-1 hover:ring-lvl-yellow/40 transition-all group">
+          <div className="w-10 h-10 rounded-lg bg-lvl-yellow/10 flex items-center justify-center shrink-0">
+            <BarChart3 className="w-5 h-5 text-lvl-yellow" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-body font-medium">View Full Analytics</p>
+            <p className="text-lvl-smoke text-xs font-body">
+              View detailed analytics, revenue charts, and customer insights
+            </p>
+          </div>
+          <ChevronRight className="w-5 h-5 text-lvl-smoke group-hover:text-lvl-yellow transition-colors shrink-0" />
+        </div>
+      </Link>
     </div>
   );
 }

@@ -7,9 +7,9 @@ import { cn } from "@/lib/utils";
 import { getCartCount } from "@/lib/cart-store";
 
 const NAV_LINKS = [
-  { label: "Shop", href: "/shop" },
+  { label: "Shop", href: "/" },
   { label: "Live", href: "/live" },
-  { label: "Drops", href: "/drops" },
+  { label: "Drops", href: "/category/streetwear" },
 ] as const;
 
 function Header() {
@@ -98,11 +98,17 @@ function Header() {
           </Link>
 
           <Link
-            href="/account"
-            className="hidden lg:flex items-center justify-center w-10 h-10 rounded-lg text-lvl-smoke hover:text-lvl-white hover:bg-lvl-slate/50 transition-colors"
-            aria-label="Account"
+            href="/auth/login"
+            className="hidden lg:flex items-center justify-center px-4 h-9 rounded-lg text-sm font-display uppercase tracking-wider text-lvl-smoke hover:text-lvl-white border border-lvl-slate hover:border-lvl-smoke transition-colors"
           >
-            <User size={20} />
+            Sign In
+          </Link>
+
+          <Link
+            href="/auth/register"
+            className="hidden lg:flex items-center justify-center px-4 h-9 rounded-lg text-sm font-display uppercase tracking-wider bg-lvl-yellow text-lvl-black font-bold hover:bg-lvl-yellow/90 transition-colors"
+          >
+            Sign Up
           </Link>
 
           {/* Mobile Menu Toggle */}
@@ -132,23 +138,21 @@ function Header() {
                 {link.label}
               </Link>
             ))}
-            <div className="flex items-center gap-4 pt-6">
+            <div className="flex flex-col gap-3 pt-6">
               <Link
-                href="/account"
+                href="/auth/login"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-2 text-lvl-smoke hover:text-lvl-white transition-colors"
+                className="flex items-center justify-center py-3 rounded-lg border border-lvl-slate text-lvl-white font-display uppercase tracking-wider hover:border-lvl-yellow transition-colors"
               >
-                <User size={20} />
-                <span className="font-body text-sm">Account</span>
+                Sign In
               </Link>
-              <button
-                type="button"
-                className="flex items-center gap-2 text-lvl-smoke hover:text-lvl-white transition-colors"
-                aria-label="Search"
+              <Link
+                href="/auth/register"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center justify-center py-3 rounded-lg bg-lvl-yellow text-lvl-black font-display uppercase tracking-wider font-bold hover:bg-lvl-yellow/90 transition-colors"
               >
-                <Search size={20} />
-                <span className="font-body text-sm">Search</span>
-              </button>
+                Sign Up
+              </Link>
             </div>
           </nav>
         </div>

@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Oswald, Poppins } from "next/font/google";
+import { Header } from "@/components/layout/header";
+import { Footer } from "@/components/layout/footer";
+import { BottomNav } from "@/components/layout/bottom-nav";
 import "./globals.css";
 
 const oswald = Oswald({
@@ -47,7 +50,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${oswald.variable} ${poppins.variable}`}>
       <body className="bg-lvl-black text-lvl-white font-body antialiased">
-        {children}
+        <Header />
+        <main className="min-h-screen">{children}</main>
+        <Footer />
+        <BottomNav />
       </body>
     </html>
   );
