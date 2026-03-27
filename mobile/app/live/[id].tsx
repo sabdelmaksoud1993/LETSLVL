@@ -13,10 +13,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { colors, spacing, borderRadius } from '../../theme';
-import { useAuth } from '../../lib/auth-context';
-import { getStream, type Stream } from '../../lib/data';
-import { supabase } from '../../lib/supabase';
+import { colors, spacing, borderRadius } from '../../src/theme';
+import { useAuth } from '../../src/lib/auth-context';
+import { getStream, type Stream } from '../../src/lib/data';
+import { supabase } from '../../src/lib/supabase';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 

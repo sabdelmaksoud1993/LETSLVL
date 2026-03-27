@@ -8,13 +8,13 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, spacing, borderRadius } from '../../theme';
-import { formatPrice } from '../../lib/utils';
+import { colors, spacing, borderRadius } from '../../src/theme';
+import { formatPrice } from '../../src/lib/utils';
 import {
   getCartFromStorage,
   saveCartToStorage,
   type CartItem,
-} from '../../lib/data';
+} from '../../src/lib/data';
 
 export default function CartScreen() {
   const [cartItems, setCartItems] = useState<readonly CartItem[]>([]);

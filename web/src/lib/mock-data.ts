@@ -36,6 +36,7 @@ export const products: Product[] = [
     is_live_exclusive: false,
     seller_id: "s1",
     status: "active",
+    department: "unisex",
   },
   {
     id: "p2",
@@ -61,6 +62,7 @@ export const products: Product[] = [
     is_live_exclusive: false,
     seller_id: "s2",
     status: "active",
+    department: "men",
   },
   {
     id: "p3",
@@ -85,6 +87,7 @@ export const products: Product[] = [
     is_live_exclusive: false,
     seller_id: "s3",
     status: "active",
+    department: "men",
   },
   {
     id: "p4",
@@ -109,6 +112,7 @@ export const products: Product[] = [
     is_live_exclusive: true,
     seller_id: "s4",
     status: "active",
+    department: "unisex",
   },
   {
     id: "p5",

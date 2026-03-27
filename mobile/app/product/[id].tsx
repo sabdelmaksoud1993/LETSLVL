@@ -14,9 +14,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { colors, spacing, borderRadius } from '../../theme';
-import { formatPrice } from '../../lib/utils';
-import { useAuth } from '../../lib/auth-context';
+import { colors, spacing, borderRadius } from '../../src/theme';
+import { formatPrice } from '../../src/lib/utils';
+import { useAuth } from '../../src/lib/auth-context';
 import {
   getProduct,
   isInWishlist,
@@ -26,7 +26,7 @@ import {
   saveCartToStorage,
   type Product,
   type CartItem,
-} from '../../lib/data';
+} from '../../src/lib/data';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 

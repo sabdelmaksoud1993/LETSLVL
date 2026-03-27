@@ -1,3 +1,5 @@
+export type Department = "men" | "women" | "kids" | "unisex";
+
 export interface Product {
   id: string;
   created_at: string;
@@ -19,6 +21,7 @@ export interface Product {
   is_live_exclusive: boolean;
   seller_id: string;
   status: "active" | "draft" | "archived";
+  department: Department;
 }
 
 export interface Category {
