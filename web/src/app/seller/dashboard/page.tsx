@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 import { PayoutSetup } from "@/components/seller/payout-setup";
+import { LowStockAlerts } from "@/components/seller/low-stock-alerts";
 
 const STATS = [
   {
@@ -104,6 +105,9 @@ export default function SellerDashboardPage() {
           Go Live
         </Link>
       </div>
+
+      {/* Low Stock Alerts */}
+      <LowStockAlerts />
 
       {/* Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">

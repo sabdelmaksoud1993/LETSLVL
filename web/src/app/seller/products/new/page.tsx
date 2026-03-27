@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { createProduct, getCategories } from "@/lib/supabase-data";
 import { useAuth } from "@/lib/auth-context";
 import { ImageUploader } from "@/components/seller/image-uploader";
+import { AiDescriptionGenerator } from "@/components/seller/ai-description";
+import { AiPhotoProduct } from "@/components/seller/ai-photo-product";
 import type { Category } from "@/types/database";
 
 // ---------------------------------------------------------------------------
@@ -253,6 +255,27 @@ export default function AddProductPage() {
     [addChip]
   );
 
+  // ---- AI photo apply handler -----------------------------------------------
+
+  const selectedCategoryName = dbCategories.find((c) => c.id === categoryId)?.name ?? "";
+
+  const handlePhotoApply = useCallback(
+    (data: {
+      title: string;
+      brand: string;
+      description: string;
+      tags: string[];
+      suggestedPrice: number;
+    }) => {
+      setTitle(data.title);
+      setBrand(data.brand);
+      setDescription(data.description);
+      setTags(data.tags);
+      setPrice(String(data.suggestedPrice));
+    },
+    []
+  );
+
   // ---- auth gate ------------------------------------------------------------
 
   if (!authLoading && !user) {
@@ -293,6 +316,9 @@ export default function AddProductPage() {
       </h1>
 
       <form onSubmit={onFormSubmit} className="space-y-6">
+        {/* ── Quick Start: Photo to Product ─────────────────────────────── */}
+        <AiPhotoProduct onApply={handlePhotoApply} />
+
         {/* ── Basic Info ───────────────────────────────────────────────────── */}
         <section className="bg-lvl-carbon rounded-xl p-6">
           <h2 className="font-display text-lg font-bold tracking-wider mb-4">
@@ -328,6 +354,12 @@ export default function AddProductPage() {
                 rows={4}
                 placeholder="Tell buyers about condition, authenticity, sizing..."
                 className={cn(INPUT_CLS, "resize-none")}
+              />
+              <AiDescriptionGenerator
+                title={title}
+                brand={brand}
+                category={selectedCategoryName}
+                onApply={(desc) => setDescription(desc)}
               />
             </div>
 

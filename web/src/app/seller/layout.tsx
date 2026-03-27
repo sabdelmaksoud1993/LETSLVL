@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import {
   LayoutDashboard,
   Package,
+  Layers,
   ShoppingBag,
   Radio,
   BarChart3,
@@ -28,6 +29,7 @@ interface NavItem {
 const NAV_ITEMS: readonly NavItem[] = [
   { label: "Dashboard", href: "/seller/dashboard", icon: LayoutDashboard },
   { label: "Products", href: "/seller/products", icon: Package },
+  { label: "Collections", href: "/seller/collections", icon: Layers },
   { label: "Orders", href: "/seller/orders", icon: ShoppingBag },
   { label: "Go Live", href: "/seller/go-live", icon: Radio },
   { label: "Analytics", href: "/seller/analytics", icon: BarChart3 },

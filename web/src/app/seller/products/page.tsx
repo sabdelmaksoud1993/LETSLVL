@@ -11,17 +11,21 @@ import {
   Package,
   ChevronDown,
   LogIn,
+  Copy,
+  FileSpreadsheet,
+  CheckCircle,
 } from "lucide-react";
 import { cn, formatPrice } from "@/lib/utils";
-import { getSellerProducts, archiveProduct } from "@/lib/supabase-data";
+import { getSellerProducts, archiveProduct, createProduct } from "@/lib/supabase-data";
 import { useAuth } from "@/lib/auth-context";
+import { SavedFilters, type SavedFilter } from "@/components/seller/saved-filters";
 import type { Product } from "@/types/database";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type StatusFilter = "all" | "active" | "draft" | "archived";
+type StatusFilter = "all" | "active" | "draft" | "archived" | "low_stock" | "live_exclusive";
 type SortKey = "newest" | "price" | "stock";
 
 // ---------------------------------------------------------------------------
@@ -36,6 +40,7 @@ export default function SellerProductsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortBy, setSortBy] = useState<SortKey>("newest");
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   // ---- load from Supabase ---------------------------------------------------
 
@@ -62,7 +67,9 @@ export default function SellerProductsPage() {
     const active = products.filter((p) => p.status === "active").length;
     const draft = products.filter((p) => p.status === "draft").length;
     const archived = products.filter((p) => p.status === "archived").length;
-    return { all, active, draft, archived };
+    const low_stock = products.filter((p) => p.inventory_count < 5 && p.status !== "archived").length;
+    const live_exclusive = products.filter((p) => p.is_live_exclusive).length;
+    return { all, active, draft, archived, low_stock, live_exclusive };
   }, [products]);
 
   // ---- filter & sort --------------------------------------------------------
@@ -78,8 +85,20 @@ export default function SellerProductsPage() {
 
     const results = products.filter((p) => {
       const matchesSearch = p.title.toLowerCase().includes(query);
-      const matchesStatus =
-        statusFilter === "all" ? true : p.status === statusFilter;
+      let matchesStatus = true;
+      switch (statusFilter) {
+        case "all":
+          matchesStatus = true;
+          break;
+        case "low_stock":
+          matchesStatus = p.inventory_count < 5 && p.status !== "archived";
+          break;
+        case "live_exclusive":
+          matchesStatus = p.is_live_exclusive;
+          break;
+        default:
+          matchesStatus = p.status === statusFilter;
+      }
       return matchesSearch && matchesStatus;
     });
 
@@ -119,9 +138,57 @@ export default function SellerProductsPage() {
     [loadProducts]
   );
 
+  // ---- duplicate handler ----------------------------------------------------
+
+  const handleDuplicate = useCallback(
+    async (product: Product) => {
+      try {
+        await createProduct({
+          title: `Copy of ${product.title}`,
+          slug: `copy-of-${product.slug}-${Date.now()}`,
+          description: product.description,
+          brand: product.brand,
+          price: product.price,
+          compare_at_price: product.compare_at_price,
+          currency: product.currency,
+          category_id: product.category_id,
+          images: [...product.images],
+          sizes: [...product.sizes],
+          colors: [...product.colors],
+          tags: [...product.tags],
+          inventory_count: product.inventory_count,
+          status: "draft",
+          is_live_exclusive: product.is_live_exclusive,
+          is_featured: false,
+          seller_id: product.seller_id,
+        });
+        setToast("Product duplicated");
+        setTimeout(() => setToast(null), 3000);
+        await loadProducts();
+      } catch (err) {
+        console.error("Failed to duplicate product:", err);
+      }
+    },
+    [loadProducts]
+  );
+
+  // ---- saved filters handler ------------------------------------------------
+
+  const handleApplyFilter = useCallback((filters: SavedFilter) => {
+    setStatusFilter(filters.status as StatusFilter);
+    setSearchQuery(filters.search);
+    setSortBy(filters.sort as SortKey);
+  }, []);
+
+  const currentFilters: SavedFilter = useMemo(
+    () => ({ status: statusFilter, search: searchQuery, sort: sortBy }),
+    [statusFilter, searchQuery, sortBy]
+  );
+
   // ---- status tab config ----------------------------------------------------
 
-  const STATUS_TABS: { key: StatusFilter; label: string }[] = [
+  type TabKey = "all" | "active" | "draft" | "archived";
+  const STATUS_TABS: { key: TabKey; label: string }[] = [
     { key: "all", label: "All" },
     { key: "active", label: "Active" },
     { key: "draft", label: "Draft" },
@@ -170,14 +237,33 @@ export default function SellerProductsPage() {
         <h1 className="font-display text-3xl font-bold tracking-wider">
           MY <span className="text-lvl-yellow">PRODUCTS</span>
         </h1>
-        <Link
-          href="/seller/products/new"
-          className="flex items-center gap-2 bg-lvl-yellow text-lvl-black font-display uppercase tracking-widest text-sm py-2.5 px-5 rounded-lg font-bold hover:opacity-90 transition-opacity"
-        >
-          <Plus className="w-4 h-4" />
-          Add Product
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/seller/products/import"
+            className="flex items-center gap-2 border border-lvl-slate text-lvl-smoke font-display uppercase tracking-widest text-sm py-2.5 px-4 rounded-lg font-bold hover:text-lvl-white hover:border-lvl-smoke transition-colors"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Import / Export
+          </Link>
+          <Link
+            href="/seller/products/bulk-edit"
+            className="flex items-center gap-2 border border-lvl-slate text-lvl-smoke font-display uppercase tracking-widest text-sm py-2.5 px-4 rounded-lg font-bold hover:text-lvl-white hover:border-lvl-smoke transition-colors"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Bulk Edit
+          </Link>
+          <Link
+            href="/seller/products/new"
+            className="flex items-center gap-2 bg-lvl-yellow text-lvl-black font-display uppercase tracking-widest text-sm py-2.5 px-5 rounded-lg font-bold hover:opacity-90 transition-opacity"
+          >
+            <Plus className="w-4 h-4" />
+            Add Product
+          </Link>
+        </div>
       </div>
+
+      {/* Saved Filter Views */}
+      <SavedFilters onApply={handleApplyFilter} currentFilters={currentFilters} />
 
       {/* Status Tabs */}
       <div className="flex gap-1 mb-4 bg-lvl-carbon rounded-lg p-1">
@@ -350,6 +436,14 @@ export default function SellerProductsPage() {
 
               {/* Actions */}
               <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleDuplicate(product)}
+                  className="w-9 h-9 rounded-lg bg-lvl-slate flex items-center justify-center hover:bg-lvl-yellow/20 transition-colors"
+                  aria-label={`Duplicate ${product.title}`}
+                >
+                  <Copy className="w-4 h-4 text-lvl-smoke" />
+                </button>
                 <Link
                   href={`/seller/products/${product.id}/edit`}
                   className="w-9 h-9 rounded-lg bg-lvl-slate flex items-center justify-center hover:bg-lvl-yellow/20 transition-colors"
@@ -370,6 +464,14 @@ export default function SellerProductsPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-lvl-carbon border border-green-500/40 rounded-lg py-3 px-5 shadow-lg animate-in fade-in slide-in-from-bottom-2">
+          <CheckCircle className="w-4 h-4 text-green-400" />
+          <span className="text-sm font-body text-lvl-white">{toast}</span>
         </div>
       )}
     </div>
