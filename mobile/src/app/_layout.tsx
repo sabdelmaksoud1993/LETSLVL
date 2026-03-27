@@ -1,10 +1,11 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { colors } from '../theme';
+import { AuthProvider } from '../lib/auth-context';
 
 export default function RootLayout() {
   return (
-    <>
+    <AuthProvider>
       <StatusBar style="light" />
       <Stack
         screenOptions={{
@@ -31,6 +32,6 @@ export default function RootLayout() {
           options={{ animation: 'slide_from_right' }}
         />
       </Stack>
-    </>
+    </AuthProvider>
   );
 }

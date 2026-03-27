@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { colors, spacing, borderRadius } from '../../theme';
+import { useAuth } from '../../lib/auth-context';
+import { getStream, type Stream } from '../../lib/data';
+import { supabase } from '../../lib/supabase';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -23,15 +27,12 @@ interface ChatMessage {
   readonly isBid?: boolean;
 }
 
-const STREAM = {
+// Fallback mock data
+const MOCK_STREAM = {
   id: '1',
   title: 'Supreme Drop Unboxing - Rare Pieces!',
-  seller: 'HypeKing',
-  viewers: 1243,
-  currentBid: 450,
-  bidCount: 23,
-  timeLeft: 45,
-  currentItem: 'Supreme Box Logo Tee FW24',
+  seller_name: 'HypeKing',
+  viewer_count: 1243,
 };
 
 const INITIAL_CHAT: readonly ChatMessage[] = [
@@ -49,12 +50,40 @@ const INITIAL_CHAT: readonly ChatMessage[] = [
 
 export default function StreamViewerScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { user, profile } = useAuth();
+
+  const [stream, setStream] = useState<Stream | null>(null);
+  const [loading, setLoading] = useState(true);
   const [chatMessages, setChatMessages] = useState<readonly ChatMessage[]>(INITIAL_CHAT);
   const [chatInput, setChatInput] = useState('');
-  const [timeLeft, setTimeLeft] = useState(STREAM.timeLeft);
+  const [viewerCount, setViewerCount] = useState(0);
+  const [currentBid, setCurrentBid] = useState(450);
+  const [bidCount, setBidCount] = useState(23);
+  const [timeLeft, setTimeLeft] = useState(45);
   const chatRef = useRef<FlatList>(null);
 
+  const fetchStream = useCallback(async () => {
+    if (!id) return;
+
+    try {
+      const data = await getStream(id);
+      if (data) {
+        setStream(data);
+        setViewerCount(data.viewer_count ?? 0);
+      }
+    } catch (error) {
+      console.error('Failed to fetch stream:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    fetchStream();
+  }, [fetchStream]);
+
+  // Timer countdown
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
@@ -62,16 +91,156 @@ export default function StreamViewerScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  const sendMessage = () => {
+  // Realtime subscriptions for chat and bids
+  useEffect(() => {
+    if (!id) return;
+
+    // Subscribe to chat messages
+    const chatChannel = supabase
+      .channel(`chat-${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `stream_id=eq.${id}`,
+        },
+        (payload) => {
+          const msg = payload.new as {
+            id: string;
+            user_name: string;
+            message: string;
+            is_bid: boolean;
+          };
+          const newMessage: ChatMessage = {
+            id: msg.id,
+            user: msg.user_name ?? 'Anonymous',
+            message: msg.message,
+            isBid: msg.is_bid ?? false,
+          };
+          setChatMessages((prev) => [...prev, newMessage]);
+        },
+      )
+      .subscribe();
+
+    // Subscribe to bid updates
+    const bidChannel = supabase
+      .channel(`bids-${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'bids',
+          filter: `stream_id=eq.${id}`,
+        },
+        (payload) => {
+          const bid = payload.new as { amount: number };
+          if (bid.amount > currentBid) {
+            setCurrentBid(bid.amount);
+            setBidCount((prev) => prev + 1);
+          }
+        },
+      )
+      .subscribe();
+
+    // Subscribe to viewer count changes
+    const streamChannel = supabase
+      .channel(`stream-${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'streams',
+          filter: `id=eq.${id}`,
+        },
+        (payload) => {
+          const updated = payload.new as { viewer_count: number };
+          setViewerCount(updated.viewer_count ?? 0);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(chatChannel);
+      supabase.removeChannel(bidChannel);
+      supabase.removeChannel(streamChannel);
+    };
+  }, [id, currentBid]);
+
+  const sendMessage = useCallback(async () => {
     if (chatInput.trim().length === 0) return;
+
+    const userName = profile?.full_name ?? user?.email ?? 'You';
+
+    // Optimistic local update
     const newMessage: ChatMessage = {
-      id: String(chatMessages.length + 1),
-      user: 'You',
+      id: String(Date.now()),
+      user: userName,
       message: chatInput.trim(),
     };
     setChatMessages((prev) => [...prev, newMessage]);
     setChatInput('');
-  };
+
+    // Persist to Supabase if logged in
+    if (user && id) {
+      try {
+        await supabase.from('chat_messages').insert({
+          stream_id: id,
+          user_id: user.id,
+          user_name: userName,
+          message: newMessage.message,
+          is_bid: false,
+        });
+      } catch (error) {
+        console.error('Failed to send message:', error);
+      }
+    }
+  }, [chatInput, user, profile, id]);
+
+  const handleBid = useCallback(async () => {
+    if (!user) {
+      router.push('/auth/login');
+      return;
+    }
+
+    const bidAmount = currentBid + 25;
+
+    // Optimistic local update
+    setCurrentBid(bidAmount);
+    setBidCount((prev) => prev + 1);
+
+    const userName = profile?.full_name ?? user.email ?? 'You';
+    const bidMessage: ChatMessage = {
+      id: String(Date.now()),
+      user: userName,
+      message: `$${bidAmount} bid!`,
+      isBid: true,
+    };
+    setChatMessages((prev) => [...prev, bidMessage]);
+
+    // Persist to Supabase
+    if (id) {
+      try {
+        await supabase.from('bids').insert({
+          stream_id: id,
+          user_id: user.id,
+          amount: bidAmount,
+        });
+        await supabase.from('chat_messages').insert({
+          stream_id: id,
+          user_id: user.id,
+          user_name: userName,
+          message: `$${bidAmount} bid!`,
+          is_bid: true,
+        });
+      } catch (error) {
+        console.error('Failed to place bid:', error);
+      }
+    }
+  }, [user, profile, id, currentBid, router]);
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -90,9 +259,23 @@ export default function StreamViewerScreen() {
     </View>
   );
 
+  const sellerName = stream?.seller_name ?? MOCK_STREAM.seller_name;
+  const streamTitle = stream?.title ?? MOCK_STREAM.title;
+  const displayViewerCount = viewerCount || MOCK_STREAM.viewer_count;
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.videoBackground}>
+          <ActivityIndicator size="large" color={colors.yellow} />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      {/* Video Placeholder (Full Screen Background) */}
+      {/* Video Placeholder */}
       <View style={styles.videoBackground}>
         <Text style={styles.videoPlaceholder}>LIVE STREAM</Text>
         <Text style={styles.videoSubtext}>Video feed goes here</Text>
@@ -115,13 +298,13 @@ export default function StreamViewerScreen() {
             <View style={styles.streamInfo}>
               <View style={styles.sellerBadge}>
                 <Text style={styles.sellerInitial}>
-                  {STREAM.seller.charAt(0)}
+                  {sellerName.charAt(0)}
                 </Text>
               </View>
               <View>
-                <Text style={styles.sellerName}>{STREAM.seller}</Text>
-                <Text style={styles.streamTitle} numberOfLines={1}>
-                  {STREAM.title}
+                <Text style={styles.sellerNameText}>{sellerName}</Text>
+                <Text style={styles.streamTitleText} numberOfLines={1}>
+                  {streamTitle}
                 </Text>
               </View>
             </View>
@@ -132,22 +315,21 @@ export default function StreamViewerScreen() {
                 <Text style={styles.liveBadgeText}>LIVE</Text>
               </View>
               <View style={styles.viewerBadge}>
-                <Text style={styles.viewerIcon}>{'\u1F441'}</Text>
                 <Text style={styles.viewerText}>
-                  {STREAM.viewers.toLocaleString()}
+                  {displayViewerCount.toLocaleString()}
                 </Text>
               </View>
             </View>
           </View>
         </SafeAreaView>
 
-        {/* Spacer to push content down */}
+        {/* Spacer */}
         <View style={styles.spacer} />
 
         {/* Auction Panel */}
         <View style={styles.auctionPanel}>
           <View style={styles.auctionHeader}>
-            <Text style={styles.auctionItemName}>{STREAM.currentItem}</Text>
+            <Text style={styles.auctionItemName}>Current Auction</Text>
             <View style={styles.timerBadge}>
               <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
             </View>
@@ -156,12 +338,16 @@ export default function StreamViewerScreen() {
           <View style={styles.auctionRow}>
             <View>
               <Text style={styles.bidLabel}>CURRENT BID</Text>
-              <Text style={styles.bidAmount}>${STREAM.currentBid}</Text>
-              <Text style={styles.bidCount}>{STREAM.bidCount} bids</Text>
+              <Text style={styles.bidAmount}>${currentBid}</Text>
+              <Text style={styles.bidCountText}>{bidCount} bids</Text>
             </View>
-            <TouchableOpacity style={styles.bidButton} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.bidButton}
+              activeOpacity={0.8}
+              onPress={handleBid}
+            >
               <Text style={styles.bidButtonText}>
-                BID ${STREAM.currentBid + 25}
+                BID ${currentBid + 25}
               </Text>
             </TouchableOpacity>
           </View>
@@ -171,7 +357,7 @@ export default function StreamViewerScreen() {
         <View style={styles.chatContainer}>
           <FlatList
             ref={chatRef}
-            data={chatMessages}
+            data={chatMessages as ChatMessage[]}
             renderItem={renderChatMessage}
             keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
@@ -271,12 +457,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.black,
   },
-  sellerName: {
+  sellerNameText: {
     fontSize: 13,
     fontWeight: '700',
     color: colors.white,
   },
-  streamTitle: {
+  streamTitleText: {
     fontSize: 11,
     color: colors.smoke,
     maxWidth: 160,
@@ -315,10 +501,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: borderRadius.sm,
     gap: 4,
-  },
-  viewerIcon: {
-    fontSize: 12,
-    color: colors.white,
   },
   viewerText: {
     fontSize: 12,
@@ -377,7 +559,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: colors.yellow,
   },
-  bidCount: {
+  bidCountText: {
     fontSize: 12,
     color: colors.smoke,
   },

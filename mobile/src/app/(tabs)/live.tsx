@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,14 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius } from '../../theme';
+import { getStreams, type Stream } from '../../lib/data';
+import { supabase } from '../../lib/supabase';
 
 const CATEGORIES = [
   'All',
@@ -21,95 +25,84 @@ const CATEGORIES = [
   'Watches',
 ];
 
-const LIVE_STREAMS = [
-  {
-    id: '1',
-    title: 'Pokemon Booster Box Opening!',
-    seller: 'CardMaster',
-    sellerAvatar: 'C',
-    viewers: 2431,
-    category: 'Trading Card Games',
-    isLive: true,
-  },
-  {
-    id: '2',
-    title: 'Rare Air Jordan Collection Auction',
-    seller: 'SneakerVault',
-    sellerAvatar: 'S',
-    viewers: 1876,
-    category: 'Fashion',
-    isLive: true,
-  },
-  {
-    id: '3',
-    title: 'Topps Chrome Baseball Breaks',
-    seller: 'SportsCollector',
-    sellerAvatar: 'SC',
-    viewers: 943,
-    category: 'Sports Cards',
-    isLive: true,
-  },
-  {
-    id: '4',
-    title: 'Vintage Star Wars Toys Live Sale',
-    seller: 'RetroToys',
-    sellerAvatar: 'R',
-    viewers: 654,
-    category: 'Toys',
-    isLive: true,
-  },
-  {
-    id: '5',
-    title: 'Supreme x Louis Vuitton Drops',
-    seller: 'HypeKing',
-    sellerAvatar: 'H',
-    viewers: 3210,
-    category: 'Fashion',
-    isLive: true,
-  },
-  {
-    id: '6',
-    title: 'Yu-Gi-Oh! Ghost Rare Hunt',
-    seller: 'DuelMaster',
-    sellerAvatar: 'D',
-    viewers: 1122,
-    category: 'Trading Card Games',
-    isLive: true,
-  },
-  {
-    id: '7',
-    title: 'Rolex & AP Watch Showcase',
-    seller: 'WatchDealer',
-    sellerAvatar: 'W',
-    viewers: 4500,
-    category: 'Watches',
-    isLive: true,
-  },
-  {
-    id: '8',
-    title: 'Nike Dunk Low Mystery Box',
-    seller: 'KickzKing',
-    sellerAvatar: 'K',
-    viewers: 789,
-    category: 'Sneakers',
-    isLive: true,
-  },
+const MOCK_STREAMS = [
+  { id: '1', title: 'Pokemon Booster Box Opening!', seller_name: 'CardMaster', viewer_count: 2431, category: 'Trading Card Games', status: 'live' },
+  { id: '2', title: 'Rare Air Jordan Collection Auction', seller_name: 'SneakerVault', viewer_count: 1876, category: 'Fashion', status: 'live' },
+  { id: '3', title: 'Topps Chrome Baseball Breaks', seller_name: 'SportsCollector', viewer_count: 943, category: 'Sports Cards', status: 'live' },
+  { id: '4', title: 'Vintage Star Wars Toys Live Sale', seller_name: 'RetroToys', viewer_count: 654, category: 'Toys', status: 'live' },
+  { id: '5', title: 'Supreme x Louis Vuitton Drops', seller_name: 'HypeKing', viewer_count: 3210, category: 'Fashion', status: 'live' },
+  { id: '6', title: "Yu-Gi-Oh! Ghost Rare Hunt", seller_name: 'DuelMaster', viewer_count: 1122, category: 'Trading Card Games', status: 'live' },
+  { id: '7', title: 'Rolex & AP Watch Showcase', seller_name: 'WatchDealer', viewer_count: 4500, category: 'Watches', status: 'live' },
+  { id: '8', title: 'Nike Dunk Low Mystery Box', seller_name: 'KickzKing', viewer_count: 789, category: 'Sneakers', status: 'live' },
 ];
+
+type StreamItem = Stream | typeof MOCK_STREAMS[0];
 
 export default function LiveScreen() {
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [streams, setStreams] = useState<readonly StreamItem[]>(MOCK_STREAMS);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchStreams = useCallback(async () => {
+    try {
+      const data = await getStreams({ status: 'live' });
+      if (data.length > 0) {
+        setStreams(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch streams:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStreams();
+
+    // Subscribe to realtime changes on streams table
+    const channel = supabase
+      .channel('streams-live')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'streams' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newStream = payload.new as Stream;
+            if (newStream.status === 'live') {
+              setStreams((prev) => [newStream, ...prev]);
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = payload.new as Stream;
+            setStreams((prev) =>
+              prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)),
+            );
+          } else if (payload.eventType === 'DELETE') {
+            const deletedId = (payload.old as { id: string }).id;
+            setStreams((prev) => prev.filter((s) => s.id !== deletedId));
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchStreams]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchStreams();
+    setRefreshing(false);
+  }, [fetchStreams]);
 
   const filteredStreams =
     selectedCategory === 'All'
-      ? LIVE_STREAMS
-      : LIVE_STREAMS.filter((s) => s.category === selectedCategory);
+      ? streams
+      : streams.filter((s) => s.category === selectedCategory);
 
-  const renderStreamCard = ({
-    item,
-  }: {
-    item: (typeof LIVE_STREAMS)[0];
-  }) => (
+  const renderStreamCard = ({ item }: { item: StreamItem }) => (
     <TouchableOpacity
       style={styles.streamCard}
       onPress={() => router.push(`/live/${item.id}`)}
@@ -124,7 +117,7 @@ export default function LiveScreen() {
         <View style={styles.viewerBadge}>
           <Text style={styles.viewerIcon}>&#x1F441;</Text>
           <Text style={styles.viewerText}>
-            {item.viewers.toLocaleString()}
+            {(item.viewer_count ?? 0).toLocaleString()}
           </Text>
         </View>
       </View>
@@ -134,22 +127,37 @@ export default function LiveScreen() {
         <View style={styles.sellerRow}>
           <View style={styles.sellerAvatar}>
             <Text style={styles.sellerAvatarText}>
-              {item.sellerAvatar}
+              {(item.seller_name ?? 'U').charAt(0)}
             </Text>
           </View>
           <View style={styles.sellerInfo}>
             <Text style={styles.streamTitle} numberOfLines={1}>
               {item.title}
             </Text>
-            <Text style={styles.sellerName}>{item.seller}</Text>
+            <Text style={styles.sellerName}>{item.seller_name ?? 'Unknown'}</Text>
           </View>
         </View>
-        <View style={styles.categoryTag}>
-          <Text style={styles.categoryTagText}>{item.category}</Text>
-        </View>
+        {item.category ? (
+          <View style={styles.categoryTag}>
+            <Text style={styles.categoryTagText}>{item.category}</Text>
+          </View>
+        ) : null}
       </View>
     </TouchableOpacity>
   );
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>LIVE</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.yellow} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -159,7 +167,7 @@ export default function LiveScreen() {
         <View style={styles.liveCount}>
           <View style={styles.headerLiveDot} />
           <Text style={styles.liveCountText}>
-            {LIVE_STREAMS.length} streams
+            {filteredStreams.length} streams
           </Text>
         </View>
       </View>
@@ -194,12 +202,19 @@ export default function LiveScreen() {
 
       {/* Stream List */}
       <FlatList
-        data={filteredStreams}
+        data={filteredStreams as StreamItem[]}
         renderItem={renderStreamCard}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.yellow}
+          />
+        }
       />
     </SafeAreaView>
   );
@@ -209,6 +224,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.black,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   header: {
     flexDirection: 'row',

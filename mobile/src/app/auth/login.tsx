@@ -8,16 +8,50 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius } from '../../theme';
+import { useAuth } from '../../lib/auth-context';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSignIn = async () => {
+    if (!email.trim()) {
+      setError('Please enter your email address');
+      return;
+    }
+    if (!password) {
+      setError('Please enter your password');
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+
+    try {
+      const result = await signIn(email.trim(), password);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        router.back();
+      }
+    } catch (err) {
+      setError('An unexpected error occurred. Please try again.');
+      console.error('Sign in error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -49,6 +83,13 @@ export default function LoginScreen() {
             </Text>
           </View>
 
+          {/* Error Message */}
+          {error ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
           {/* Form */}
           <View style={styles.form}>
             <View style={styles.inputGroup}>
@@ -58,10 +99,14 @@ export default function LoginScreen() {
                 placeholder="your@email.com"
                 placeholderTextColor={colors.smoke}
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  setError(null);
+                }}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                editable={!loading}
               />
             </View>
 
@@ -73,9 +118,13 @@ export default function LoginScreen() {
                   placeholder="Enter your password"
                   placeholderTextColor={colors.smoke}
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    setError(null);
+                  }}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  editable={!loading}
                 />
                 <TouchableOpacity
                   style={styles.showPasswordButton}
@@ -92,8 +141,17 @@ export default function LoginScreen() {
               <Text style={styles.forgotPasswordText}>Forgot password?</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.signInButton} activeOpacity={0.8}>
-              <Text style={styles.signInButtonText}>SIGN IN</Text>
+            <TouchableOpacity
+              style={[styles.signInButton, loading && styles.signInButtonDisabled]}
+              activeOpacity={0.8}
+              onPress={handleSignIn}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color={colors.black} />
+              ) : (
+                <Text style={styles.signInButtonText}>SIGN IN</Text>
+              )}
             </TouchableOpacity>
 
             {/* Divider */}
@@ -192,6 +250,19 @@ const styles = StyleSheet.create({
     color: colors.smoke,
     marginTop: spacing.xs,
   },
+  errorContainer: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#EF4444',
+    textAlign: 'center',
+  },
   form: {
     gap: spacing.md,
   },
@@ -253,6 +324,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: spacing.sm,
+  },
+  signInButtonDisabled: {
+    opacity: 0.7,
   },
   signInButtonText: {
     fontSize: 16,

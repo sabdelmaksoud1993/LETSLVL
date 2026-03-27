@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,15 +8,26 @@ import {
   FlatList,
   RefreshControl,
   Dimensions,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius } from '../../theme';
+import {
+  getProducts,
+  getCategories,
+  getStreams,
+  type Product,
+  type Category,
+  type Stream,
+} from '../../lib/data';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PRODUCT_CARD_WIDTH = (SCREEN_WIDTH - spacing.md * 3) / 2;
 
-const CATEGORIES = [
+// Fallback mock data
+const MOCK_CATEGORIES = [
   'All',
   'Streetwear',
   'Sneakers',
@@ -26,118 +37,127 @@ const CATEGORIES = [
   'Watches',
 ];
 
-const LIVE_STREAMS = [
-  {
-    id: '1',
-    title: 'Supreme Drop Unboxing',
-    seller: 'HypeKing',
-    viewers: 1243,
-    thumbnail: null,
-  },
-  {
-    id: '2',
-    title: 'Rare Jordans Collection',
-    seller: 'SneakerVault',
-    viewers: 876,
-    thumbnail: null,
-  },
-  {
-    id: '3',
-    title: 'Designer Bags Live Auction',
-    seller: 'LuxeDeals',
-    viewers: 2100,
-    thumbnail: null,
-  },
-  {
-    id: '4',
-    title: 'Y2K Fashion Finds',
-    seller: 'RetroStyle',
-    viewers: 543,
-    thumbnail: null,
-  },
+const MOCK_STREAMS = [
+  { id: '1', title: 'Supreme Drop Unboxing', seller_name: 'HypeKing', viewer_count: 1243 },
+  { id: '2', title: 'Rare Jordans Collection', seller_name: 'SneakerVault', viewer_count: 876 },
+  { id: '3', title: 'Designer Bags Live Auction', seller_name: 'LuxeDeals', viewer_count: 2100 },
+  { id: '4', title: 'Y2K Fashion Finds', seller_name: 'RetroStyle', viewer_count: 543 },
 ];
 
-const TRENDING_PRODUCTS = [
-  {
-    id: '1',
-    title: 'Air Jordan 1 Retro High OG',
-    brand: 'Nike',
-    price: 189.99,
-    image: null,
-  },
-  {
-    id: '2',
-    title: 'Box Logo Hoodie FW24',
-    brand: 'Supreme',
-    price: 348.0,
-    image: null,
-  },
-  {
-    id: '3',
-    title: 'Classic Leather Belt',
-    brand: 'Gucci',
-    price: 450.0,
-    image: null,
-  },
-  {
-    id: '4',
-    title: 'Yeezy Slide Onyx',
-    brand: 'Adidas',
-    price: 129.99,
-    image: null,
-  },
-  {
-    id: '5',
-    title: 'Essentials Hoodie',
-    brand: 'Fear of God',
-    price: 195.0,
-    image: null,
-  },
-  {
-    id: '6',
-    title: 'Submariner Date',
-    brand: 'Rolex',
-    price: 14500.0,
-    image: null,
-  },
+const MOCK_PRODUCTS = [
+  { id: '1', title: 'Air Jordan 1 Retro High OG', brand: 'Nike', price: 189.99, images: [] },
+  { id: '2', title: 'Box Logo Hoodie FW24', brand: 'Supreme', price: 348.0, images: [] },
+  { id: '3', title: 'Classic Leather Belt', brand: 'Gucci', price: 450.0, images: [] },
+  { id: '4', title: 'Yeezy Slide Onyx', brand: 'Adidas', price: 129.99, images: [] },
+  { id: '5', title: 'Essentials Hoodie', brand: 'Fear of God', price: 195.0, images: [] },
+  { id: '6', title: 'Submariner Date', brand: 'Rolex', price: 14500.0, images: [] },
 ];
 
 export default function HomeScreen() {
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<readonly string[]>(MOCK_CATEGORIES);
+  const [streams, setStreams] = useState<readonly (Stream | typeof MOCK_STREAMS[0])[]>(MOCK_STREAMS);
+  const [products, setProducts] = useState<readonly (Product | typeof MOCK_PRODUCTS[0])[]>(MOCK_PRODUCTS);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1500);
+  const fetchData = useCallback(async () => {
+    try {
+      const [categoriesData, featuredProducts, liveStreams] = await Promise.all([
+        getCategories(),
+        getProducts({ featured: true, limit: 6 }),
+        getStreams({ status: 'live', limit: 4 }),
+      ]);
+
+      if (categoriesData.length > 0) {
+        setCategories(['All', ...categoriesData.map((c) => c.name)]);
+      }
+
+      if (featuredProducts.length > 0) {
+        setProducts(featuredProducts);
+      }
+
+      if (liveStreams.length > 0) {
+        setStreams(liveStreams);
+      }
+    } catch (error) {
+      console.error('Failed to fetch home data:', error);
+      // Keep mock data as fallback
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  }, [fetchData]);
+
+  const getProductImage = (item: Product | typeof MOCK_PRODUCTS[0]): string | null => {
+    if ('images' in item && Array.isArray(item.images) && item.images.length > 0) {
+      return item.images[0] as string;
+    }
+    return null;
+  };
+
+  const getProductBrand = (item: Product | typeof MOCK_PRODUCTS[0]): string => {
+    return item.brand ?? 'Unknown';
+  };
 
   const renderProductCard = ({
     item,
   }: {
-    item: (typeof TRENDING_PRODUCTS)[0];
-  }) => (
-    <TouchableOpacity
-      style={styles.productCard}
-      onPress={() => router.push(`/product/${item.id}`)}
-      activeOpacity={0.8}
-    >
-      <View style={styles.productImage}>
-        <Text style={styles.productImagePlaceholder}>
-          {item.brand.charAt(0)}
-        </Text>
-      </View>
-      <View style={styles.productInfo}>
-        <Text style={styles.productBrand}>{item.brand}</Text>
-        <Text style={styles.productTitle} numberOfLines={2}>
-          {item.title}
-        </Text>
-        <Text style={styles.productPrice}>
-          ${item.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+    item: Product | typeof MOCK_PRODUCTS[0];
+  }) => {
+    const imageUrl = getProductImage(item);
+    const brand = getProductBrand(item);
+
+    return (
+      <TouchableOpacity
+        style={styles.productCard}
+        onPress={() => router.push(`/product/${item.id}`)}
+        activeOpacity={0.8}
+      >
+        <View style={styles.productImage}>
+          {imageUrl ? (
+            <Image source={{ uri: imageUrl }} style={styles.productImageFull} resizeMode="cover" />
+          ) : (
+            <Text style={styles.productImagePlaceholder}>
+              {brand.charAt(0)}
+            </Text>
+          )}
+        </View>
+        <View style={styles.productInfo}>
+          <Text style={styles.productBrand}>{brand}</Text>
+          <Text style={styles.productTitle} numberOfLines={2}>
+            {item.title}
+          </Text>
+          <Text style={styles.productPrice}>
+            ${item.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <Text style={styles.logo}>LET&apos;S LVL</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.yellow} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -178,7 +198,7 @@ export default function HomeScreen() {
           style={styles.categoriesContainer}
           contentContainerStyle={styles.categoriesContent}
         >
-          {CATEGORIES.map((cat) => (
+          {categories.map((cat) => (
             <TouchableOpacity
               key={cat}
               style={[
@@ -215,7 +235,7 @@ export default function HomeScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.liveStreamsList}
           >
-            {LIVE_STREAMS.map((stream) => (
+            {streams.map((stream) => (
               <TouchableOpacity
                 key={stream.id}
                 style={styles.streamCard}
@@ -229,14 +249,16 @@ export default function HomeScreen() {
                   </View>
                   <View style={styles.viewerCount}>
                     <Text style={styles.viewerCountText}>
-                      {stream.viewers.toLocaleString()}
+                      {(stream.viewer_count ?? 0).toLocaleString()}
                     </Text>
                   </View>
                 </View>
                 <Text style={styles.streamTitle} numberOfLines={1}>
                   {stream.title}
                 </Text>
-                <Text style={styles.streamSeller}>{stream.seller}</Text>
+                <Text style={styles.streamSeller}>
+                  {stream.seller_name ?? 'Unknown'}
+                </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -251,7 +273,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           <FlatList
-            data={TRENDING_PRODUCTS}
+            data={products as (Product | typeof MOCK_PRODUCTS[0])[]}
             renderItem={renderProductCard}
             keyExtractor={(item) => item.id}
             numColumns={2}
@@ -273,6 +295,11 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   header: {
     flexDirection: 'row',
@@ -472,6 +499,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.slate,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  productImageFull: {
+    width: '100%',
+    height: '100%',
   },
   productImagePlaceholder: {
     fontSize: 32,

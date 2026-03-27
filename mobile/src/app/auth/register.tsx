@@ -8,10 +8,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius } from '../../theme';
+import { useAuth } from '../../lib/auth-context';
 
 const COUNTRIES = [
   'United Arab Emirates',
@@ -26,6 +29,7 @@ const COUNTRIES = [
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const { signUp } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -33,6 +37,51 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleRegister = async () => {
+    if (!fullName.trim()) {
+      setError('Please enter your full name');
+      return;
+    }
+    if (!email.trim()) {
+      setError('Please enter your email address');
+      return;
+    }
+    if (!password || password.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+
+    try {
+      const result = await signUp(email.trim(), password, {
+        full_name: fullName.trim(),
+        phone: phone.trim(),
+        country,
+      });
+
+      if (result.error) {
+        setError(result.error);
+      } else {
+        Alert.alert(
+          'Account Created',
+          'Please check your email to verify your account, then sign in.',
+          [{ text: 'OK', onPress: () => router.back() }],
+        );
+      }
+    } catch (err) {
+      setError('An unexpected error occurred. Please try again.');
+      console.error('Sign up error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const clearError = () => setError(null);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -61,6 +110,13 @@ export default function RegisterScreen() {
             Join the LET&apos;S LVL community and start shopping
           </Text>
 
+          {/* Error Message */}
+          {error ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
           {/* Form */}
           <View style={styles.form}>
             <View style={styles.inputGroup}>
@@ -70,8 +126,9 @@ export default function RegisterScreen() {
                 placeholder="Enter your full name"
                 placeholderTextColor={colors.smoke}
                 value={fullName}
-                onChangeText={setFullName}
+                onChangeText={(text) => { setFullName(text); clearError(); }}
                 autoCapitalize="words"
+                editable={!loading}
               />
             </View>
 
@@ -82,10 +139,11 @@ export default function RegisterScreen() {
                 placeholder="your@email.com"
                 placeholderTextColor={colors.smoke}
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(text) => { setEmail(text); clearError(); }}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                editable={!loading}
               />
             </View>
 
@@ -96,8 +154,9 @@ export default function RegisterScreen() {
                 placeholder="+971 50 123 4567"
                 placeholderTextColor={colors.smoke}
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={(text) => { setPhone(text); clearError(); }}
                 keyboardType="phone-pad"
+                editable={!loading}
               />
             </View>
 
@@ -106,6 +165,7 @@ export default function RegisterScreen() {
               <TouchableOpacity
                 style={styles.countrySelector}
                 onPress={() => setShowCountryPicker((prev) => !prev)}
+                disabled={loading}
               >
                 <Text
                   style={[
@@ -131,6 +191,7 @@ export default function RegisterScreen() {
                       onPress={() => {
                         setCountry(c);
                         setShowCountryPicker(false);
+                        clearError();
                       }}
                     >
                       <Text
@@ -155,9 +216,10 @@ export default function RegisterScreen() {
                   placeholder="Min 8 characters"
                   placeholderTextColor={colors.smoke}
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={(text) => { setPassword(text); clearError(); }}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  editable={!loading}
                 />
                 <TouchableOpacity
                   style={styles.showPasswordButton}
@@ -171,10 +233,16 @@ export default function RegisterScreen() {
             </View>
 
             <TouchableOpacity
-              style={styles.createButton}
+              style={[styles.createButton, loading && styles.createButtonDisabled]}
               activeOpacity={0.8}
+              onPress={handleRegister}
+              disabled={loading}
             >
-              <Text style={styles.createButtonText}>CREATE ACCOUNT</Text>
+              {loading ? (
+                <ActivityIndicator size="small" color={colors.black} />
+              ) : (
+                <Text style={styles.createButtonText}>CREATE ACCOUNT</Text>
+              )}
             </TouchableOpacity>
 
             {/* Terms */}
@@ -247,6 +315,19 @@ const styles = StyleSheet.create({
     color: colors.smoke,
     textAlign: 'center',
     marginBottom: spacing.xl,
+  },
+  errorContainer: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#EF4444',
+    textAlign: 'center',
   },
   form: {
     gap: spacing.md,
@@ -348,6 +429,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: spacing.sm,
+  },
+  createButtonDisabled: {
+    opacity: 0.7,
   },
   createButtonText: {
     fontSize: 16,

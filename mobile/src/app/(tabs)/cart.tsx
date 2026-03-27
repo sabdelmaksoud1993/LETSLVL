@@ -1,76 +1,63 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius } from '../../theme';
-
-interface CartItem {
-  readonly id: string;
-  readonly title: string;
-  readonly brand: string;
-  readonly price: number;
-  readonly size: string;
-  readonly color: string;
-  readonly image: null;
-  readonly quantity: number;
-}
-
-const INITIAL_CART: readonly CartItem[] = [
-  {
-    id: '1',
-    title: 'Air Jordan 1 Retro High OG',
-    brand: 'Nike',
-    price: 189.99,
-    size: 'US 10',
-    color: 'Chicago',
-    image: null,
-    quantity: 1,
-  },
-  {
-    id: '2',
-    title: 'Box Logo Hoodie FW24',
-    brand: 'Supreme',
-    price: 348.0,
-    size: 'L',
-    color: 'Black',
-    image: null,
-    quantity: 1,
-  },
-  {
-    id: '3',
-    title: 'Classic Leather Belt',
-    brand: 'Gucci',
-    price: 450.0,
-    size: '85cm',
-    color: 'Black',
-    image: null,
-    quantity: 1,
-  },
-];
+import {
+  getCartFromStorage,
+  saveCartToStorage,
+  type CartItem,
+} from '../../lib/data';
 
 export default function CartScreen() {
-  const [cartItems, setCartItems] = useState<readonly CartItem[]>(INITIAL_CART);
+  const [cartItems, setCartItems] = useState<readonly CartItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const updateQuantity = (id: string, delta: number) => {
-    setCartItems((prev) =>
-      prev
+  const loadCart = useCallback(async () => {
+    try {
+      const items = await getCartFromStorage();
+      setCartItems(items);
+    } catch (error) {
+      console.error('Failed to load cart:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCart();
+  }, [loadCart]);
+
+  const updateQuantity = useCallback(
+    async (id: string, delta: number) => {
+      const updated = cartItems
         .map((item) =>
           item.id === id
             ? { ...item, quantity: Math.max(0, item.quantity + delta) }
             : item,
         )
-        .filter((item) => item.quantity > 0),
-    );
-  };
+        .filter((item) => item.quantity > 0);
 
-  const removeItem = (id: string) => {
-    setCartItems((prev) => prev.filter((item) => item.id !== id));
-  };
+      setCartItems(updated);
+      await saveCartToStorage(updated);
+    },
+    [cartItems],
+  );
+
+  const removeItem = useCallback(
+    async (id: string) => {
+      const updated = cartItems.filter((item) => item.id !== id);
+      setCartItems(updated);
+      await saveCartToStorage(updated);
+    },
+    [cartItems],
+  );
 
   const subtotal = cartItems.reduce(
     (sum, item) => sum + item.price * item.quantity,
@@ -78,6 +65,19 @@ export default function CartScreen() {
   );
   const shipping = cartItems.length > 0 ? 15.0 : 0;
   const total = subtotal + shipping;
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>CART</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.yellow} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (cartItems.length === 0) {
     return (
@@ -212,6 +212,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.black,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   header: {
     flexDirection: 'row',

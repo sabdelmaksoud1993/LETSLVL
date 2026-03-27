@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,45 +8,171 @@ import {
   Dimensions,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  ActivityIndicator,
+  Image,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { colors, spacing, borderRadius } from '../../theme';
+import { useAuth } from '../../lib/auth-context';
+import {
+  getProduct,
+  isInWishlist,
+  addToWishlist,
+  removeFromWishlist,
+  getCartFromStorage,
+  saveCartToStorage,
+  type Product,
+  type CartItem,
+} from '../../lib/data';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const PRODUCT = {
+// Fallback mock data
+const MOCK_PRODUCT = {
   id: '1',
   title: 'Air Jordan 1 Retro High OG',
   brand: 'Nike',
   price: 189.99,
-  images: [
-    { id: '1', color: colors.slate },
-    { id: '2', color: '#3B3B3B' },
-    { id: '3', color: '#4A4A4A' },
-    { id: '4', color: '#333333' },
-  ],
+  images: [],
   sizes: ['US 7', 'US 8', 'US 9', 'US 10', 'US 11', 'US 12'],
-  colors: [
-    { name: 'Chicago', hex: '#C41E3A' },
-    { name: 'Bred', hex: '#1A1A1A' },
-    { name: 'Royal', hex: '#2563EB' },
-    { name: 'Shadow', hex: '#6B7280' },
-  ],
+  colors: ['Chicago', 'Bred', 'Royal', 'Shadow'],
   description:
-    'The Air Jordan 1 Retro High OG brings back the iconic silhouette that started it all. Premium leather upper with classic colorway, Nike Air cushioning, and the unmistakable Wings logo. A timeless sneaker that transcends the court and defines street culture.',
-  seller: 'SneakerVault',
-  rating: 4.8,
-  reviews: 234,
+    'The Air Jordan 1 Retro High OG brings back the iconic silhouette that started it all. Premium leather upper with classic colorway, Nike Air cushioning, and the unmistakable Wings logo.',
+  seller_id: null,
+};
+
+const COLOR_HEX_MAP: Record<string, string> = {
+  Chicago: '#C41E3A',
+  Bred: '#1A1A1A',
+  Royal: '#2563EB',
+  Shadow: '#6B7280',
+  Black: '#1A1A1A',
+  White: '#F0F0F0',
+  Red: '#EF4444',
+  Blue: '#3B82F6',
+  Green: '#22C55E',
 };
 
 export default function ProductDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
+
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
-  const [selectedColor, setSelectedColor] = useState(PRODUCT.colors[0].name);
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const [addingToCart, setAddingToCart] = useState(false);
+
+  const fetchProduct = useCallback(async () => {
+    if (!id) return;
+
+    try {
+      const data = await getProduct(id);
+      if (data) {
+        setProduct(data);
+        if (data.colors && data.colors.length > 0) {
+          setSelectedColor(data.colors[0] as string);
+        }
+      } else {
+        // Use mock as fallback
+        setProduct(MOCK_PRODUCT as unknown as Product);
+        setSelectedColor('Chicago');
+      }
+    } catch (error) {
+      console.error('Failed to fetch product:', error);
+      setProduct(MOCK_PRODUCT as unknown as Product);
+      setSelectedColor('Chicago');
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  const checkWishlist = useCallback(async () => {
+    if (!user || !id) return;
+    try {
+      const inWishlist = await isInWishlist(user.id, id);
+      setIsWishlisted(inWishlist);
+    } catch (error) {
+      console.error('Failed to check wishlist:', error);
+    }
+  }, [user, id]);
+
+  useEffect(() => {
+    fetchProduct();
+    checkWishlist();
+  }, [fetchProduct, checkWishlist]);
+
+  const handleWishlistToggle = useCallback(async () => {
+    if (!user) {
+      router.push('/auth/login');
+      return;
+    }
+    if (!id) return;
+
+    try {
+      if (isWishlisted) {
+        await removeFromWishlist(user.id, id);
+        setIsWishlisted(false);
+      } else {
+        await addToWishlist(user.id, id);
+        setIsWishlisted(true);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update wishlist');
+      console.error('Wishlist toggle failed:', error);
+    }
+  }, [user, id, isWishlisted, router]);
+
+  const handleAddToCart = useCallback(async () => {
+    if (!product) return;
+    if (!selectedSize) {
+      Alert.alert('Select Size', 'Please select a size before adding to cart.');
+      return;
+    }
+
+    setAddingToCart(true);
+    try {
+      const existingCart = await getCartFromStorage();
+      const cartItemId = `${product.id}-${selectedSize}-${selectedColor ?? 'default'}`;
+
+      const existingIndex = existingCart.findIndex((item) => item.id === cartItemId);
+
+      let updatedCart: readonly CartItem[];
+      if (existingIndex >= 0) {
+        updatedCart = existingCart.map((item, index) =>
+          index === existingIndex
+            ? { ...item, quantity: item.quantity + 1 }
+            : item,
+        );
+      } else {
+        const newItem: CartItem = {
+          id: cartItemId,
+          product_id: product.id,
+          title: product.title,
+          brand: product.brand ?? 'Unknown',
+          price: product.price,
+          size: selectedSize,
+          color: selectedColor ?? 'Default',
+          image: product.images && product.images.length > 0 ? (product.images[0] as string) : null,
+          quantity: 1,
+        };
+        updatedCart = [...existingCart, newItem];
+      }
+
+      await saveCartToStorage(updatedCart);
+      Alert.alert('Added to Cart', `${product.title} has been added to your cart.`);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to add item to cart');
+      console.error('Add to cart failed:', error);
+    } finally {
+      setAddingToCart(false);
+    }
+  }, [product, selectedSize, selectedColor]);
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const index = Math.round(
@@ -54,6 +180,35 @@ export default function ProductDetailScreen() {
     );
     setCurrentImageIndex(index);
   };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
+          <View style={styles.headerOverlay}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <Text style={styles.backArrow}>{'\u2039'}</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.yellow} />
+        </View>
+      </View>
+    );
+  }
+
+  if (!product) return null;
+
+  const images = product.images && product.images.length > 0
+    ? product.images
+    : [null, null, null, null]; // placeholder slides
+
+  const sizes = product.sizes ?? MOCK_PRODUCT.sizes;
+  const productColors = product.colors ?? MOCK_PRODUCT.colors;
 
   return (
     <View style={styles.container}>
@@ -84,23 +239,27 @@ export default function ProductDetailScreen() {
           onScroll={handleScroll}
           scrollEventThrottle={16}
         >
-          {PRODUCT.images.map((img) => (
+          {images.map((img, index) => (
             <View
-              key={img.id}
-              style={[styles.imageSlide, { backgroundColor: img.color }]}
+              key={`image-${index}`}
+              style={[styles.imageSlide, { backgroundColor: colors.slate }]}
             >
-              <Text style={styles.imagePlaceholder}>
-                {PRODUCT.brand.charAt(0)}
-              </Text>
+              {img ? (
+                <Image source={{ uri: img as string }} style={styles.imageSlide} resizeMode="cover" />
+              ) : (
+                <Text style={styles.imagePlaceholder}>
+                  {(product.brand ?? 'U').charAt(0)}
+                </Text>
+              )}
             </View>
           ))}
         </ScrollView>
 
         {/* Dots Indicator */}
         <View style={styles.dotsContainer}>
-          {PRODUCT.images.map((img, index) => (
+          {images.map((_, index) => (
             <View
-              key={img.id}
+              key={`dot-${index}`}
               style={[
                 styles.dot,
                 currentImageIndex === index && styles.dotActive,
@@ -111,91 +270,95 @@ export default function ProductDetailScreen() {
 
         {/* Product Info */}
         <View style={styles.infoContainer}>
-          <Text style={styles.brand}>{PRODUCT.brand}</Text>
-          <Text style={styles.title}>{PRODUCT.title}</Text>
+          <Text style={styles.brand}>{product.brand ?? 'Unknown'}</Text>
+          <Text style={styles.title}>{product.title}</Text>
 
           <View style={styles.priceRow}>
             <Text style={styles.price}>
               $
-              {PRODUCT.price.toLocaleString('en-US', {
+              {product.price.toLocaleString('en-US', {
                 minimumFractionDigits: 2,
               })}
             </Text>
-            <View style={styles.ratingBadge}>
-              <Text style={styles.ratingStar}>{'\u2605'}</Text>
-              <Text style={styles.ratingText}>
-                {PRODUCT.rating} ({PRODUCT.reviews})
+            {product.compare_at_price ? (
+              <Text style={styles.comparePrice}>
+                $
+                {product.compare_at_price.toLocaleString('en-US', {
+                  minimumFractionDigits: 2,
+                })}
               </Text>
-            </View>
+            ) : null}
           </View>
 
           {/* Size Selector */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionLabel}>SIZE</Text>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.sizesContainer}
-          >
-            {PRODUCT.sizes.map((size) => (
-              <TouchableOpacity
-                key={size}
-                style={[
-                  styles.sizePill,
-                  selectedSize === size && styles.sizePillActive,
-                ]}
-                onPress={() => setSelectedSize(size)}
+          {sizes.length > 0 && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionLabel}>SIZE</Text>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.sizesContainer}
               >
-                <Text
-                  style={[
-                    styles.sizeText,
-                    selectedSize === size && styles.sizeTextActive,
-                  ]}
-                >
-                  {size}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+                {sizes.map((size) => (
+                  <TouchableOpacity
+                    key={size as string}
+                    style={[
+                      styles.sizePill,
+                      selectedSize === size && styles.sizePillActive,
+                    ]}
+                    onPress={() => setSelectedSize(size as string)}
+                  >
+                    <Text
+                      style={[
+                        styles.sizeText,
+                        selectedSize === size && styles.sizeTextActive,
+                      ]}
+                    >
+                      {size as string}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </>
+          )}
 
           {/* Color Selector */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionLabel}>COLOR</Text>
-            <Text style={styles.selectedColorName}>{selectedColor}</Text>
-          </View>
-          <View style={styles.colorsContainer}>
-            {PRODUCT.colors.map((color) => (
-              <TouchableOpacity
-                key={color.name}
-                style={[
-                  styles.colorCircle,
-                  { backgroundColor: color.hex },
-                  selectedColor === color.name && styles.colorCircleActive,
-                ]}
-                onPress={() => setSelectedColor(color.name)}
-              />
-            ))}
-          </View>
+          {productColors.length > 0 && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionLabel}>COLOR</Text>
+                <Text style={styles.selectedColorName}>{selectedColor}</Text>
+              </View>
+              <View style={styles.colorsContainer}>
+                {productColors.map((colorName) => (
+                  <TouchableOpacity
+                    key={colorName as string}
+                    style={[
+                      styles.colorCircle,
+                      {
+                        backgroundColor:
+                          COLOR_HEX_MAP[colorName as string] ?? colors.slate,
+                      },
+                      selectedColor === colorName && styles.colorCircleActive,
+                    ]}
+                    onPress={() => setSelectedColor(colorName as string)}
+                  />
+                ))}
+              </View>
+            </>
+          )}
 
           {/* Description */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionLabel}>DESCRIPTION</Text>
-          </View>
-          <Text style={styles.description}>{PRODUCT.description}</Text>
-
-          {/* Seller */}
-          <View style={styles.sellerSection}>
-            <View style={styles.sellerAvatar}>
-              <Text style={styles.sellerAvatarText}>
-                {PRODUCT.seller.charAt(0)}
-              </Text>
-            </View>
-            <View>
-              <Text style={styles.sellerName}>{PRODUCT.seller}</Text>
-              <Text style={styles.sellerLabel}>Verified Seller</Text>
-            </View>
-          </View>
+          {product.description && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionLabel}>DESCRIPTION</Text>
+              </View>
+              <Text style={styles.description}>{product.description}</Text>
+            </>
+          )}
 
           <View style={styles.bottomSpacer} />
         </View>
@@ -205,7 +368,7 @@ export default function ProductDetailScreen() {
       <SafeAreaView style={styles.bottomBar} edges={['bottom']}>
         <TouchableOpacity
           style={styles.wishlistButton}
-          onPress={() => setIsWishlisted((prev) => !prev)}
+          onPress={handleWishlistToggle}
           activeOpacity={0.8}
         >
           <Text
@@ -217,8 +380,15 @@ export default function ProductDetailScreen() {
             {isWishlisted ? '\u2665' : '\u2661'}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.addToCartButton} activeOpacity={0.8}>
-          <Text style={styles.addToCartText}>ADD TO CART</Text>
+        <TouchableOpacity
+          style={[styles.addToCartButton, addingToCart && styles.addToCartButtonDisabled]}
+          onPress={handleAddToCart}
+          activeOpacity={0.8}
+          disabled={addingToCart}
+        >
+          <Text style={styles.addToCartText}>
+            {addingToCart ? 'ADDING...' : 'ADD TO CART'}
+          </Text>
         </TouchableOpacity>
       </SafeAreaView>
     </View>
@@ -229,6 +399,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.black,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   safeArea: {
     position: 'absolute',
@@ -320,28 +495,19 @@ const styles = StyleSheet.create({
   },
   priceRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: spacing.md,
+    gap: spacing.md,
   },
   price: {
     fontSize: 28,
     fontWeight: '900',
     color: colors.white,
   },
-  ratingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  ratingStar: {
-    fontSize: 16,
-    color: colors.yellow,
-  },
-  ratingText: {
-    fontSize: 14,
+  comparePrice: {
+    fontSize: 18,
     color: colors.smoke,
-    fontWeight: '600',
+    textDecorationLine: 'line-through',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -404,41 +570,6 @@ const styles = StyleSheet.create({
     color: colors.smoke,
     lineHeight: 22,
   },
-  sellerSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginTop: spacing.lg,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.carbon,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.slate,
-  },
-  sellerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.yellow,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sellerAvatarText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.black,
-  },
-  sellerName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.white,
-  },
-  sellerLabel: {
-    fontSize: 12,
-    color: colors.smoke,
-    marginTop: 2,
-  },
   bottomSpacer: {
     height: 120,
   },
@@ -479,6 +610,9 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  addToCartButtonDisabled: {
+    opacity: 0.6,
   },
   addToCartText: {
     fontSize: 16,

@@ -1,14 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius } from '../../theme';
+import { useAuth } from '../../lib/auth-context';
+import { getUserOrders, getWishlist } from '../../lib/data';
 
 const MENU_ITEMS = [
   { id: 'orders', label: 'My Orders', icon: '\uD83D\uDCE6' },
@@ -19,17 +22,71 @@ const MENU_ITEMS = [
 
 export default function AccountScreen() {
   const router = useRouter();
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  const { user, profile, loading: authLoading, signOut } = useAuth();
+  const [orderCount, setOrderCount] = useState(0);
+  const [wishlistCount, setWishlistCount] = useState(0);
+  const [statsLoading, setStatsLoading] = useState(false);
 
-  // Mock user data
-  const user = {
-    name: 'Sherif Abdelmaksoud',
-    email: 'sherif@letslvl.com',
-    avatar: 'SA',
-    memberSince: 'March 2024',
+  const loadStats = useCallback(async () => {
+    if (!user) return;
+    setStatsLoading(true);
+    try {
+      const [orders, wishlist] = await Promise.all([
+        getUserOrders(user.id),
+        getWishlist(user.id),
+      ]);
+      setOrderCount(orders.length);
+      setWishlistCount(wishlist.length);
+    } catch (error) {
+      console.error('Failed to load account stats:', error);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      loadStats();
+    }
+  }, [user, loadStats]);
+
+  const getInitials = (): string => {
+    if (profile?.full_name) {
+      return profile.full_name
+        .split(' ')
+        .map((n) => n.charAt(0))
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
+    }
+    if (user?.email) {
+      return user.email.charAt(0).toUpperCase();
+    }
+    return '?';
   };
 
-  if (!isLoggedIn) {
+  const getMemberSince = (): string => {
+    if (user?.created_at) {
+      const date = new Date(user.created_at);
+      return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    }
+    return 'Recently';
+  };
+
+  if (authLoading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>ACCOUNT</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.yellow} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!user) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
@@ -75,30 +132,38 @@ export default function AccountScreen() {
         {/* Profile Section */}
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
-            <Text style={styles.avatarText}>{user.avatar}</Text>
+            <Text style={styles.avatarText}>{getInitials()}</Text>
           </View>
-          <Text style={styles.userName}>{user.name}</Text>
+          <Text style={styles.userName}>
+            {profile?.full_name ?? user.email ?? 'User'}
+          </Text>
           <Text style={styles.userEmail}>{user.email}</Text>
           <Text style={styles.memberSince}>
-            Member since {user.memberSince}
+            Member since {getMemberSince()}
           </Text>
         </View>
 
         {/* Quick Stats */}
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>12</Text>
+            <Text style={styles.statValue}>
+              {statsLoading ? '-' : orderCount}
+            </Text>
             <Text style={styles.statLabel}>Orders</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>6</Text>
+            <Text style={styles.statValue}>
+              {statsLoading ? '-' : wishlistCount}
+            </Text>
             <Text style={styles.statLabel}>Wishlist</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>3</Text>
-            <Text style={styles.statLabel}>Reviews</Text>
+            <Text style={styles.statValue}>
+              {profile?.role === 'seller' ? 'Seller' : 'Buyer'}
+            </Text>
+            <Text style={styles.statLabel}>Role</Text>
           </View>
         </View>
 
@@ -122,7 +187,7 @@ export default function AccountScreen() {
         {/* Sign Out */}
         <TouchableOpacity
           style={styles.signOutButton}
-          onPress={() => setIsLoggedIn(false)}
+          onPress={signOut}
           activeOpacity={0.8}
         >
           <Text style={styles.signOutText}>SIGN OUT</Text>
@@ -140,6 +205,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.black,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   header: {
     paddingHorizontal: spacing.md,
