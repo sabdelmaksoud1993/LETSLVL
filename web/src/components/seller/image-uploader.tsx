@@ -2,10 +2,11 @@
 
 import { useState, useRef, useCallback } from "react";
 import Image from "next/image";
-import { Upload, X, Loader2 } from "lucide-react";
+import { Upload, X, Loader2, Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { uploadProductImage, deleteProductImage } from "@/lib/storage";
+import { AIBackgroundRemove } from "@/components/seller/ai-background-remove";
 
 interface ImageUploaderProps {
   images: string[];
@@ -26,6 +27,7 @@ function ImageUploader({
   const [uploading, setUploading] = useState<Set<string>>(new Set());
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bgRemoveIndex, setBgRemoveIndex] = useState<number | null>(null);
 
   const canUpload = images.length < maxImages;
 
@@ -137,6 +139,15 @@ function ImageUploader({
     [images, onChange],
   );
 
+  const handleReplaceImage = useCallback(
+    (index: number, newUrl: string) => {
+      const updated = images.map((img, i) => (i === index ? newUrl : img));
+      onChange(updated);
+      setBgRemoveIndex(null);
+    },
+    [images, onChange],
+  );
+
   const handleClick = useCallback(() => {
     if (canUpload) {
       fileInputRef.current?.click();
@@ -158,10 +169,33 @@ function ImageUploader({
         aria-label="Upload images"
       />
 
+      {/* AI Background Removal panel */}
+      {bgRemoveIndex !== null && images[bgRemoveIndex] && (
+        <div className="mb-4 bg-lvl-carbon rounded-xl p-4 border border-lvl-slate/30">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-display font-bold tracking-wider text-lvl-yellow">
+              AI BACKGROUND REMOVAL
+            </p>
+            <button
+              type="button"
+              onClick={() => setBgRemoveIndex(null)}
+              className="text-lvl-smoke hover:text-lvl-white transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <AIBackgroundRemove
+            imageUrl={images[bgRemoveIndex]}
+            onReplace={(newUrl) => handleReplaceImage(bgRemoveIndex, newUrl)}
+          />
+        </div>
+      )}
+
       {/* Preview grid */}
       {images.length > 0 && (
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-3">
-          {images.map((url) => (
+          {images.map((url, index) => (
             <div
               key={url}
               className="relative aspect-square rounded-lg overflow-hidden group"
@@ -173,6 +207,7 @@ function ImageUploader({
                 className="object-cover"
                 sizes="(max-width: 640px) 33vw, 20vw"
               />
+              {/* Remove button */}
               <button
                 type="button"
                 onClick={() => handleRemove(url)}
@@ -180,6 +215,16 @@ function ImageUploader({
                 aria-label="Remove image"
               >
                 <X size={14} />
+              </button>
+              {/* AI Background Remove button */}
+              <button
+                type="button"
+                onClick={() => setBgRemoveIndex(index)}
+                className="absolute bottom-1 left-1 flex h-6 items-center gap-1 px-1.5 rounded-full bg-black/70 text-white text-[10px] font-body opacity-0 group-hover:opacity-100 transition-opacity hover:bg-lvl-yellow hover:text-lvl-black"
+                aria-label="Remove background"
+              >
+                <Wand2 size={10} />
+                BG
               </button>
             </div>
           ))}
