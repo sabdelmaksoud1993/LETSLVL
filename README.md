@@ -6,7 +6,20 @@ Fashion + Merchandise + Live Auctions | Dubai, UAE | 2025
 
 **Live:** [https://letslvl.vercel.app](https://letslvl.vercel.app)
 
-**Tech Stack:** Next.js 16 + TypeScript + Tailwind CSS v4 + Supabase
+**Tech Stack:** Next.js 16 + TypeScript + Tailwind CSS v4 + Supabase + Stripe
+
+**Current Version:** v0.4.0 | [Releases](https://github.com/sabdelmaksoud1993/LETSLVL/releases)
+
+---
+
+## Release History
+
+| Version | Date | Highlights |
+|---------|------|------------|
+| **v0.4.0** | 2026-03-27 | Full Supabase wiring, Realtime auctions/chat, Stripe payments, Arabic/RTL, image upload |
+| **v0.3.0** | 2026-03-27 | Supabase backend (10 tables), real auth (signup/login/session), middleware |
+| **v0.2.0** | 2026-03-27 | Header/footer fix, Sign In/Up buttons, seller CRUD, analytics dashboard |
+| **v0.1.0** | 2026-03-27 | Full frontend MVP — 20 pages, commerce, live tab, seller dashboard |
 
 ---
 
@@ -22,6 +35,24 @@ npm run dev
 ### Environment Variables
 
 Copy `.env.example` to `.env.local` and fill in your Supabase and Stripe keys.
+
+### What's Working (v0.4.0)
+
+| Feature | Status |
+|---------|--------|
+| Fashion e-commerce (browse, search, product pages) | Live (Supabase-backed) |
+| Cart + Checkout with real order creation | Live |
+| User auth (signup, login, session, OAuth-ready) | Live |
+| Seller product CRUD (add, edit, archive) | Live |
+| Seller analytics dashboard | Live |
+| Live auction tab (Trofee-style feed) | Live |
+| Real-time chat in streams | Live (Supabase Realtime) |
+| Real-time bidding in auctions | Live (Supabase Realtime) |
+| Stripe payments (Card, COD, Tabby BNPL) | Live (dev mode) |
+| Image upload (drag-and-drop) | Live (Supabase Storage) |
+| Arabic/RTL language support | Live |
+| Wishlist (user-tied, persistent) | Live |
+| Go Live (seller creates stream) | Live |
 
 ---
 
