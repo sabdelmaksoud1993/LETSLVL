@@ -1,5 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { LanguageToggle } from "@/components/layout/language-toggle";
+import { useLocale } from "@/lib/locale-context";
 
 const FOOTER_COLUMNS = [
   {
@@ -39,6 +43,7 @@ const SOCIAL_LINKS = [
 
 function Footer() {
   const currentYear = new Date().getFullYear();
+  const { t } = useLocale();
 
   return (
     <footer className="bg-lvl-carbon border-t border-lvl-slate pb-20 lg:pb-0">
@@ -98,11 +103,14 @@ function Footer() {
         {/* Bottom Bar */}
         <div className="mt-12 pt-8 border-t border-lvl-slate flex flex-col lg:flex-row items-center justify-between gap-4">
           <p className="font-body text-xs text-lvl-smoke text-center lg:text-left">
-            Built in Dubai. Shaped by culture.
+            {t('footer.tagline')}
           </p>
-          <p className="font-body text-xs text-lvl-smoke text-center lg:text-right">
-            {currentYear} LET&apos;S LVL. All rights reserved.
-          </p>
+          <div className="flex items-center gap-4">
+            <LanguageToggle />
+            <p className="font-body text-xs text-lvl-smoke text-center lg:text-right">
+              {currentYear} LET&apos;S LVL. All rights reserved.
+            </p>
+          </div>
         </div>
       </div>
     </footer>

@@ -4,6 +4,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { AuthProvider } from "@/lib/auth-context";
+import { LocaleProvider } from "@/lib/locale-context";
 import "./globals.css";
 
 const oswald = Oswald({
@@ -49,13 +50,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${oswald.variable} ${poppins.variable}`}>
+    <html lang="en" dir="ltr" className={`${oswald.variable} ${poppins.variable}`}>
       <body className="bg-lvl-black text-lvl-white font-body antialiased">
         <AuthProvider>
-          <Header />
-          <main className="min-h-screen">{children}</main>
-          <Footer />
-          <BottomNav />
+          <LocaleProvider>
+            <Header />
+            <main className="min-h-screen">{children}</main>
+            <Footer />
+            <BottomNav />
+          </LocaleProvider>
         </AuthProvider>
       </body>
     </html>

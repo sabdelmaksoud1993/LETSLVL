@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { Heart } from "lucide-react";
 import { cn, formatPrice } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/lib/auth-context";
+import { addToWishlist, removeFromWishlist, isInWishlist } from "@/lib/supabase-data";
 import type { Product } from "@/types/database";
 
 interface ProductCardProps {
@@ -17,11 +20,65 @@ function getDiscountPercent(price: number, compareAt: number): number {
 }
 
 function ProductCard({ product }: ProductCardProps) {
+  const { user } = useAuth();
+  const router = useRouter();
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
 
   const hasSale = product.compare_at_price !== null;
   const isLimited = product.inventory_count < 5;
   const isLiveExclusive = product.is_live_exclusive;
+
+  // Check wishlist status on mount when user is logged in
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+
+    async function check() {
+      try {
+        const result = await isInWishlist(user!.id, product.id);
+        if (!cancelled) setIsWishlisted(result);
+      } catch {
+        // Silently ignore errors on wishlist check
+      }
+    }
+
+    check();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, product.id]);
+
+  const handleWishlistToggle = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (!user) {
+        router.push("/auth/login");
+        return;
+      }
+
+      if (wishlistLoading) return;
+      setWishlistLoading(true);
+
+      try {
+        if (isWishlisted) {
+          await removeFromWishlist(user.id, product.id);
+          setIsWishlisted(false);
+        } else {
+          await addToWishlist(user.id, product.id);
+          setIsWishlisted(true);
+        }
+      } catch (err) {
+        console.error("Wishlist error:", err);
+      } finally {
+        setWishlistLoading(false);
+      }
+    },
+    [user, product.id, isWishlisted, wishlistLoading, router]
+  );
 
   return (
     <Link
@@ -60,12 +117,9 @@ function ProductCard({ product }: ProductCardProps) {
         <button
           type="button"
           aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setIsWishlisted((prev) => !prev);
-          }}
-          className="absolute top-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-lvl-black/60 backdrop-blur-sm transition-colors hover:bg-lvl-black/80"
+          onClick={handleWishlistToggle}
+          disabled={wishlistLoading}
+          className="absolute top-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-lvl-black/60 backdrop-blur-sm transition-colors hover:bg-lvl-black/80 disabled:opacity-50"
         >
           <Heart
             className={cn(

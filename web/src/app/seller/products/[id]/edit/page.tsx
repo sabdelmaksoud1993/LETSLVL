@@ -9,29 +9,15 @@ import {
 } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, X, Plus, Image as ImageIcon } from "lucide-react";
+import { ArrowLeft, X, Plus, Image as ImageIcon, LogIn } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  getSellerProduct,
-  updateSellerProduct,
-  deleteSellerProduct,
-  type SellerProduct,
-} from "@/lib/seller-store";
+import { getProduct, updateProduct, archiveProduct, getCategories } from "@/lib/supabase-data";
+import { useAuth } from "@/lib/auth-context";
+import type { Category } from "@/types/database";
 
 // ---------------------------------------------------------------------------
-// Constants (shared with new page — could extract to shared module later)
+// Constants (shared with new page)
 // ---------------------------------------------------------------------------
-
-const CATEGORIES = [
-  "Streetwear",
-  "Vintage",
-  "Sneakers",
-  "Trading Card Games",
-  "Sports Cards",
-  "Activewear",
-  "Accessories",
-  "Toys & Collectibles",
-] as const;
 
 const CURRENCIES = ["AED", "SAR", "KWD"] as const;
 
@@ -52,9 +38,11 @@ export default function EditProductPage() {
   const router = useRouter();
   const params = useParams();
   const productId = params.id as string;
+  const { user, loading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [dbCategories, setDbCategories] = useState<Category[]>([]);
 
   // Basic info
   const [title, setTitle] = useState("");
@@ -67,7 +55,7 @@ export default function EditProductPage() {
   const [currency, setCurrency] = useState<string>("AED");
 
   // Category
-  const [category, setCategory] = useState<string>("");
+  const [categoryId, setCategoryId] = useState<string>("");
 
   // Inventory
   const [sku, setSku] = useState("");
@@ -90,40 +78,65 @@ export default function EditProductPage() {
   // Validation
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // ---- load existing product ------------------------------------------------
 
   useEffect(() => {
-    const product = getSellerProduct(productId);
-    if (!product) {
-      setNotFound(true);
-      setLoading(false);
-      return;
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const [product, cats] = await Promise.all([
+          getProduct(productId),
+          getCategories(),
+        ]);
+
+        if (cancelled) return;
+        setDbCategories(cats);
+
+        if (!product) {
+          setNotFound(true);
+          setLoading(false);
+          return;
+        }
+
+        setTitle(product.title);
+        setDescription(product.description);
+        setBrand(product.brand);
+        setPrice(String(product.price));
+        setCompareAtPrice(
+          product.compare_at_price !== null ? String(product.compare_at_price) : ""
+        );
+        setCurrency(product.currency);
+        setCategoryId(product.category_id);
+        setInventoryCount(String(product.inventory_count));
+        setStatus(product.status === "archived" ? "draft" : product.status);
+        setSelectedSizes([...product.sizes]);
+        setColors([...product.colors]);
+        setImages(product.images.length > 0 ? [...product.images] : [""]);
+        setTags([...product.tags]);
+        setIsLiveExclusive(product.is_live_exclusive);
+        setLoading(false);
+      } catch (err) {
+        console.error("Failed to load product:", err);
+        if (!cancelled) {
+          setNotFound(true);
+          setLoading(false);
+        }
+      }
     }
 
-    setTitle(product.title);
-    setDescription(product.description);
-    setBrand(product.brand);
-    setPrice(String(product.price));
-    setCompareAtPrice(
-      product.compare_at_price !== null ? String(product.compare_at_price) : ""
-    );
-    setCurrency(product.currency);
-    setCategory(product.category);
-    setSku(product.sku);
-    setInventoryCount(String(product.inventory_count));
-    setStatus(product.status === "archived" ? "draft" : product.status);
-    setSelectedSizes([...product.sizes]);
-    setColors([...product.colors]);
-    setImages(product.images.length > 0 ? [...product.images] : [""]);
-    setTags([...product.tags]);
-    setIsLiveExclusive(product.is_live_exclusive);
-    setLoading(false);
+    load();
+    return () => {
+      cancelled = true;
+    };
   }, [productId]);
 
   // ---- size helpers ---------------------------------------------------------
 
-  const isShoeSizeCategory = category === "Sneakers";
+  const selectedCategory = dbCategories.find((c) => c.id === categoryId);
+  const isShoeSizeCategory = selectedCategory?.slug === "sneakers";
   const availableSizes = isShoeSizeCategory ? SHOE_SIZES : CLOTHING_SIZES;
 
   const toggleSize = useCallback((size: string) => {
@@ -206,39 +219,44 @@ export default function EditProductPage() {
     const next: Record<string, string> = {};
     if (!title.trim()) next.title = "Title is required";
     if (!price || Number(price) <= 0) next.price = "A valid price is required";
-    if (!category) next.category = "Select a category";
+    if (!categoryId) next.category = "Select a category";
     setErrors(next);
     return Object.keys(next).length === 0;
-  }, [title, price, category]);
+  }, [title, price, categoryId]);
 
   // ---- submit ---------------------------------------------------------------
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     if (!validate()) return;
     setSubmitting(true);
+    setSubmitError(null);
 
     const filteredImages = images.filter((u) => u.trim() !== "");
 
-    const data: Partial<SellerProduct> = {
-      title: title.trim(),
-      description: description.trim(),
-      brand: brand.trim(),
-      price: Number(price),
-      compare_at_price: compareAtPrice ? Number(compareAtPrice) : null,
-      currency,
-      category,
-      images: filteredImages,
-      sizes: [...selectedSizes],
-      colors: [...colors],
-      tags: [...tags],
-      inventory_count: inventoryCount ? Number(inventoryCount) : 0,
-      sku: sku.trim(),
-      status,
-      is_live_exclusive: isLiveExclusive,
-    };
-
-    updateSellerProduct(productId, data);
-    router.push("/seller/products");
+    try {
+      await updateProduct(productId, {
+        title: title.trim(),
+        description: description.trim(),
+        brand: brand.trim(),
+        price: Number(price),
+        compare_at_price: compareAtPrice ? Number(compareAtPrice) : null,
+        currency,
+        category_id: categoryId,
+        images: filteredImages,
+        sizes: [...selectedSizes],
+        colors: [...colors],
+        tags: [...tags],
+        inventory_count: inventoryCount ? Number(inventoryCount) : 0,
+        status,
+        is_live_exclusive: isLiveExclusive,
+      });
+      router.push("/seller/products");
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error ? err.message : "Failed to update product. Please try again."
+      );
+      setSubmitting(false);
+    }
   }, [
     validate,
     productId,
@@ -248,22 +266,25 @@ export default function EditProductPage() {
     price,
     compareAtPrice,
     currency,
-    category,
+    categoryId,
     images,
     selectedSizes,
     colors,
     tags,
     inventoryCount,
-    sku,
     status,
     isLiveExclusive,
     router,
   ]);
 
-  const handleArchive = useCallback(() => {
+  const handleArchive = useCallback(async () => {
     if (window.confirm("Are you sure you want to archive this product?")) {
-      deleteSellerProduct(productId);
-      router.push("/seller/products");
+      try {
+        await archiveProduct(productId);
+        router.push("/seller/products");
+      } catch (err) {
+        console.error("Failed to archive product:", err);
+      }
     }
   }, [productId, router]);
 
@@ -275,12 +296,36 @@ export default function EditProductPage() {
     [handleSave]
   );
 
+  // ---- auth gate ------------------------------------------------------------
+
+  if (!authLoading && !user) {
+    return (
+      <div className="min-h-screen bg-lvl-black px-4 py-8 max-w-3xl mx-auto text-center">
+        <LogIn className="mx-auto h-16 w-16 text-lvl-slate" />
+        <h1 className="mt-6 font-display text-3xl font-bold tracking-wider">
+          SIGN IN TO EDIT <span className="text-lvl-yellow">PRODUCTS</span>
+        </h1>
+        <Link
+          href="/auth/login"
+          className="mt-6 inline-block bg-lvl-yellow text-lvl-black font-display uppercase tracking-widest py-3 px-8 rounded-lg font-bold hover:opacity-90 transition-opacity text-sm"
+        >
+          Sign In
+        </Link>
+      </div>
+    );
+  }
+
   // ---- loading / not found --------------------------------------------------
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-lvl-black flex items-center justify-center">
-        <p className="text-lvl-smoke font-body text-sm">Loading...</p>
+      <div className="min-h-screen bg-lvl-black px-4 py-8 max-w-3xl mx-auto">
+        <div className="space-y-6 animate-pulse">
+          <div className="h-4 w-32 rounded bg-lvl-slate/50" />
+          <div className="h-8 w-48 rounded bg-lvl-slate/50" />
+          <div className="h-64 rounded-xl bg-lvl-carbon" />
+          <div className="h-48 rounded-xl bg-lvl-carbon" />
+        </div>
       </div>
     );
   }
@@ -460,9 +505,9 @@ export default function EditProductPage() {
               Category <span className="text-red-400">*</span>
             </label>
             <select
-              value={category}
+              value={categoryId}
               onChange={(e) => {
-                setCategory(e.target.value);
+                setCategoryId(e.target.value);
                 setSelectedSizes([]);
               }}
               className={cn(
@@ -471,9 +516,9 @@ export default function EditProductPage() {
               )}
             >
               <option value="">Select a category</option>
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
+              {dbCategories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
                 </option>
               ))}
             </select>
@@ -749,6 +794,13 @@ export default function EditProductPage() {
           </div>
         </section>
 
+        {/* Error */}
+        {submitError && (
+          <div className="rounded-xl bg-red-500/10 border border-red-500/30 p-4">
+            <p className="text-red-400 text-sm font-body">{submitError}</p>
+          </div>
+        )}
+
         {/* ── Actions ──────────────────────────────────────────────────────── */}
         <div className="flex items-center gap-3 pt-2">
           <button
@@ -764,7 +816,7 @@ export default function EditProductPage() {
             disabled={submitting}
             className="flex-1 py-3 rounded-lg font-display font-bold text-sm tracking-widest uppercase bg-lvl-yellow text-lvl-black hover:opacity-90 transition-opacity disabled:opacity-50"
           >
-            SAVE CHANGES
+            {submitting ? "SAVING..." : "SAVE CHANGES"}
           </button>
         </div>
       </form>

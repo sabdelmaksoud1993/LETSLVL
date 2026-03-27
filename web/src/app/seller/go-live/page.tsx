@@ -1,32 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  Upload,
   Radio,
   Camera,
   Mic,
   Package,
   Sun,
   Check,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth-context";
+import { createClient } from "@/lib/supabase-browser";
+import { ImageUploader } from "@/components/seller/image-uploader";
 
 const CATEGORIES = [
   "Trading Card Games",
   "Sports Cards",
   "Fashion",
   "Toys & Collectibles",
-] as const;
-
-const MOCK_PRODUCTS = [
-  { id: "p1", name: "Pokemon SV Booster Box", price: 850 },
-  { id: "p2", name: "One Piece TCG Display", price: 2100 },
-  { id: "p3", name: "Yu-Gi-Oh! Starter Deck", price: 180 },
-  { id: "p4", name: "Digimon Card Game Booster", price: 320 },
-  { id: "p5", name: "Dragon Ball Super Card Pack", price: 95 },
 ] as const;
 
 const CHECKLIST = [
@@ -36,10 +32,21 @@ const CHECKLIST = [
   { key: "lighting", label: "Good lighting", icon: Sun },
 ] as const;
 
+interface SellerProduct {
+  id: string;
+  title: string;
+  price: number;
+  currency: string;
+}
+
 export default function GoLivePage() {
+  const { user, profile, loading: authLoading } = useAuth();
+  const router = useRouter();
+
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
+  const [thumbnailImages, setThumbnailImages] = useState<string[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<
     ReadonlySet<string>
   >(new Set());
@@ -49,6 +56,44 @@ export default function GoLivePage() {
     products: false,
     lighting: false,
   });
+  const [sellerProducts, setSellerProducts] = useState<SellerProduct[]>([]);
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [goingLive, setGoingLive] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch seller's products from Supabase
+  useEffect(() => {
+    if (!user) {
+      setProductsLoading(false);
+      return;
+    }
+
+    async function fetchProducts() {
+      const supabase = createClient();
+      const { data, error: fetchError } = await supabase
+        .from("products")
+        .select("id, title, price, currency")
+        .eq("seller_id", user!.id)
+        .eq("status", "active")
+        .order("created_at", { ascending: false });
+
+      if (fetchError) {
+        console.error("Failed to fetch products:", fetchError.message);
+      } else {
+        setSellerProducts(
+          (data ?? []).map((p: Record<string, unknown>) => ({
+            id: p.id as string,
+            title: p.title as string,
+            price: p.price as number,
+            currency: (p.currency as string) ?? "AED",
+          })),
+        );
+      }
+      setProductsLoading(false);
+    }
+
+    fetchProducts();
+  }, [user]);
 
   const toggleProduct = (id: string) => {
     setSelectedProducts((prev) => {
@@ -71,10 +116,82 @@ export default function GoLivePage() {
     title.trim().length > 0 &&
     category.length > 0 &&
     selectedProducts.size > 0 &&
-    allChecked;
+    allChecked &&
+    !goingLive;
+
+  const handleGoLive = useCallback(async () => {
+    if (!user || !canGoLive) return;
+
+    setGoingLive(true);
+    setError(null);
+
+    try {
+      const supabase = createClient();
+
+      const { data: stream, error: insertError } = await supabase
+        .from("streams")
+        .insert({
+          seller_id: user.id,
+          title: title.trim(),
+          category,
+          description: description.trim(),
+          thumbnail_url: thumbnailImages[0] ?? null,
+          status: "live",
+          viewer_count: 0,
+          started_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+
+      if (insertError) {
+        throw new Error(insertError.message);
+      }
+
+      // Redirect to the newly created stream
+      router.push(`/live/stream/${stream.id}`);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to start stream.";
+      setError(message);
+      setGoingLive(false);
+    }
+  }, [user, canGoLive, title, category, description, thumbnailImages, router]);
+
+  // Auth guard
+  if (!authLoading && !user) {
+    return (
+      <div className="min-h-screen bg-lvl-black flex items-center justify-center px-4">
+        <div className="text-center">
+          <p className="text-lvl-white font-display text-2xl mb-2">
+            Sign in required
+          </p>
+          <p className="text-lvl-smoke font-body text-sm mb-4">
+            You need to be signed in as a seller to go live.
+          </p>
+          <a
+            href="/auth/login"
+            className="inline-block bg-lvl-yellow text-lvl-black font-display font-bold text-sm uppercase px-6 py-3 rounded-xl hover:bg-lvl-yellow/90 transition-colors"
+          >
+            Sign In
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-lvl-black flex items-center justify-center">
+        <Loader2 size={32} className="animate-spin text-lvl-yellow" />
+      </div>
+    );
+  }
 
   const inputClass =
     "w-full bg-lvl-carbon border border-lvl-slate rounded-lg py-3 px-4 text-lvl-white placeholder:text-lvl-smoke/50 font-body text-sm focus:outline-none focus:border-lvl-yellow transition-colors";
+
+  const displayProducts =
+    sellerProducts.length > 0 ? sellerProducts : [];
 
   return (
     <div className="min-h-screen bg-lvl-black px-4 py-8 max-w-2xl mx-auto">
@@ -161,18 +278,11 @@ export default function GoLivePage() {
             <label className="block text-sm font-body text-lvl-smoke mb-1.5">
               Thumbnail
             </label>
-            <button
-              type="button"
-              className="w-full h-36 border-2 border-dashed border-lvl-slate rounded-xl flex flex-col items-center justify-center gap-2 hover:border-lvl-yellow/50 transition-colors"
-            >
-              <Upload className="w-8 h-8 text-lvl-smoke" />
-              <span className="text-sm text-lvl-smoke font-body">
-                Click to upload thumbnail
-              </span>
-              <span className="text-xs text-lvl-smoke/60 font-body">
-                16:9 recommended, max 5 MB
-              </span>
-            </button>
+            <ImageUploader
+              images={thumbnailImages}
+              onChange={setThumbnailImages}
+              maxImages={1}
+            />
           </div>
         </div>
       </section>
@@ -183,40 +293,52 @@ export default function GoLivePage() {
           Featured Products
         </h2>
         <div className="bg-lvl-carbon rounded-xl divide-y divide-lvl-slate/40">
-          {MOCK_PRODUCTS.map((product) => {
-            const isSelected = selectedProducts.has(product.id);
-            return (
-              <label
-                key={product.id}
-                className="flex items-center gap-3 p-4 cursor-pointer hover:bg-lvl-slate/20 transition-colors"
-              >
-                <div
-                  className={cn(
-                    "w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
-                    isSelected
-                      ? "bg-lvl-yellow border-lvl-yellow"
-                      : "border-lvl-slate"
-                  )}
+          {productsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={20} className="animate-spin text-lvl-smoke" />
+            </div>
+          ) : displayProducts.length === 0 ? (
+            <div className="p-4 text-center">
+              <p className="text-sm text-lvl-smoke font-body">
+                No products found. Add products to your store first.
+              </p>
+            </div>
+          ) : (
+            displayProducts.map((product) => {
+              const isSelected = selectedProducts.has(product.id);
+              return (
+                <label
+                  key={product.id}
+                  className="flex items-center gap-3 p-4 cursor-pointer hover:bg-lvl-slate/20 transition-colors"
                 >
-                  {isSelected && (
-                    <Check className="w-3 h-3 text-lvl-black" />
-                  )}
-                </div>
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={() => toggleProduct(product.id)}
-                  className="sr-only"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-body truncate">{product.name}</p>
-                </div>
-                <p className="text-sm font-display font-bold text-lvl-smoke shrink-0">
-                  {product.price} AED
-                </p>
-              </label>
-            );
-          })}
+                  <div
+                    className={cn(
+                      "w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                      isSelected
+                        ? "bg-lvl-yellow border-lvl-yellow"
+                        : "border-lvl-slate",
+                    )}
+                  >
+                    {isSelected && (
+                      <Check className="w-3 h-3 text-lvl-black" />
+                    )}
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleProduct(product.id)}
+                    className="sr-only"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-body truncate">{product.title}</p>
+                  </div>
+                  <p className="text-sm font-display font-bold text-lvl-smoke shrink-0">
+                    {product.price} {product.currency}
+                  </p>
+                </label>
+              );
+            })
+          )}
         </div>
       </section>
 
@@ -238,7 +360,7 @@ export default function GoLivePage() {
                     "w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
                     checked
                       ? "bg-lvl-yellow border-lvl-yellow"
-                      : "border-lvl-slate"
+                      : "border-lvl-slate",
                   )}
                 >
                   {checked && (
@@ -259,19 +381,31 @@ export default function GoLivePage() {
         </div>
       </section>
 
+      {/* Error message */}
+      {error && (
+        <p className="text-sm text-red-400 font-body text-center mb-4">
+          {error}
+        </p>
+      )}
+
       {/* Go Live Button */}
       <button
         type="button"
         disabled={!canGoLive}
+        onClick={handleGoLive}
         className={cn(
           "w-full py-4 rounded-xl font-display text-2xl uppercase tracking-widest font-bold flex items-center justify-center gap-3 transition-opacity",
           canGoLive
             ? "bg-lvl-yellow text-lvl-black hover:opacity-90"
-            : "bg-lvl-yellow/30 text-lvl-black/40 cursor-not-allowed"
+            : "bg-lvl-yellow/30 text-lvl-black/40 cursor-not-allowed",
         )}
       >
-        <Radio className="w-6 h-6" />
-        GO LIVE
+        {goingLive ? (
+          <Loader2 className="w-6 h-6 animate-spin" />
+        ) : (
+          <Radio className="w-6 h-6" />
+        )}
+        {goingLive ? "STARTING..." : "GO LIVE"}
       </button>
 
       <p className="text-center text-lvl-smoke text-xs font-body mt-3">

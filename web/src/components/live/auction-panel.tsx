@@ -2,92 +2,109 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
-import { Gavel, ShoppingBag } from "lucide-react";
+import { Gavel, ShoppingBag, Loader2 } from "lucide-react";
 import { cn, formatPrice, formatTimeRemaining } from "@/lib/utils";
+import { useAuth } from "@/lib/auth-context";
+import {
+  subscribeToBids,
+  subscribeToAuction,
+  fetchRecentBids,
+  placeBid,
+} from "@/lib/realtime";
 import type { Auction, Bid } from "@/types/database";
 
 interface AuctionPanelProps {
   auction: Auction;
 }
 
-const MOCK_BIDS: readonly Bid[] = [
-  {
-    id: "b1",
-    auction_id: "a1",
-    user_id: "u5",
-    user_name: "SneakerKing99",
-    amount: 850,
-    created_at: new Date(Date.now() - 15000).toISOString(),
-    status: "active",
-  },
-  {
-    id: "b2",
-    auction_id: "a1",
-    user_id: "u2",
-    user_name: "DxBCollector",
-    amount: 800,
-    created_at: new Date(Date.now() - 45000).toISOString(),
-    status: "outbid",
-  },
-  {
-    id: "b3",
-    auction_id: "a1",
-    user_id: "u1",
-    user_name: "Ahmed_AE",
-    amount: 750,
-    created_at: new Date(Date.now() - 90000).toISOString(),
-    status: "outbid",
-  },
-] as const;
-
 function AuctionPanel({ auction }: AuctionPanelProps) {
+  const { user } = useAuth();
   const [currentBid, setCurrentBid] = useState(auction.current_bid);
   const [bidCount, setBidCount] = useState(auction.bid_count);
   const [timeRemaining, setTimeRemaining] = useState(
     formatTimeRemaining(auction.end_time),
   );
+  const [endTime, setEndTime] = useState(auction.end_time);
   const [isUrgent, setIsUrgent] = useState(false);
   const [bidFlash, setBidFlash] = useState(false);
-  const [recentBids, setRecentBids] = useState<readonly Bid[]>(MOCK_BIDS);
+  const [recentBids, setRecentBids] = useState<readonly Bid[]>([]);
+  const [bidding, setBidding] = useState(false);
+  const [bidError, setBidError] = useState<string | null>(null);
 
   const nextBidAmount = currentBid + auction.bid_increment;
   const buyNowPrice = auction.product.compare_at_price;
 
+  // Load initial bids and subscribe to realtime updates
+  useEffect(() => {
+    let unsubBids: (() => void) | null = null;
+    let unsubAuction: (() => void) | null = null;
+
+    async function init() {
+      const bids = await fetchRecentBids(auction.id);
+      setRecentBids(bids.slice(0, 3));
+
+      // Subscribe to new bids
+      unsubBids = subscribeToBids(auction.id, (newBid) => {
+        setRecentBids((prev) => {
+          const updated = [
+            newBid,
+            ...prev.map((b) => ({ ...b, status: "outbid" as const })),
+          ].slice(0, 3);
+          return updated;
+        });
+        setCurrentBid(newBid.amount);
+        setBidCount((prev) => prev + 1);
+        setBidFlash(true);
+        setTimeout(() => setBidFlash(false), 500);
+      });
+
+      // Subscribe to auction updates
+      unsubAuction = subscribeToAuction(auction.id, (update) => {
+        if (update.current_bid !== undefined) {
+          setCurrentBid(update.current_bid);
+        }
+        if (update.bid_count !== undefined) {
+          setBidCount(update.bid_count);
+        }
+        if (update.end_time !== undefined) {
+          setEndTime(update.end_time);
+        }
+      });
+    }
+
+    init();
+
+    return () => {
+      if (unsubBids) unsubBids();
+      if (unsubAuction) unsubAuction();
+    };
+  }, [auction.id]);
+
+  // Countdown timer synced with server end_time
   useEffect(() => {
     const interval = setInterval(() => {
-      const diff = new Date(auction.end_time).getTime() - Date.now();
-      setTimeRemaining(formatTimeRemaining(auction.end_time));
+      const diff = new Date(endTime).getTime() - Date.now();
+      setTimeRemaining(formatTimeRemaining(endTime));
       setIsUrgent(diff > 0 && diff < 30000);
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [auction.end_time]);
+  }, [endTime]);
 
-  const handleBid = useCallback(() => {
-    const newBidAmount = currentBid + auction.bid_increment;
+  const handleBid = useCallback(async () => {
+    if (!user) return;
 
-    const newBid: Bid = {
-      id: `b-${Date.now()}`,
-      auction_id: auction.id,
-      user_id: "me",
-      user_name: "You",
-      amount: newBidAmount,
-      created_at: new Date().toISOString(),
-      status: "active",
-    };
+    setBidding(true);
+    setBidError(null);
 
-    const updatedBids = [
-      newBid,
-      ...recentBids.map((b) => ({ ...b, status: "outbid" as const })),
-    ].slice(0, 3);
+    const result = await placeBid(auction.id, user.id, nextBidAmount);
 
-    setCurrentBid(newBidAmount);
-    setBidCount((prev) => prev + 1);
-    setRecentBids(updatedBids);
-    setBidFlash(true);
+    if (!result.success) {
+      setBidError(result.error ?? "Failed to place bid.");
+    }
 
-    setTimeout(() => setBidFlash(false), 500);
-  }, [currentBid, auction.bid_increment, auction.id, recentBids]);
+    setBidding(false);
+  }, [auction.id, user, nextBidAmount]);
 
   return (
     <div className="fixed bottom-0 inset-x-0 z-50 bg-lvl-carbon/95 backdrop-blur-lg rounded-t-2xl border-t border-lvl-slate/50">
@@ -170,17 +187,39 @@ function AuctionPanel({ auction }: AuctionPanelProps) {
           ))}
         </div>
 
+        {/* Bid error */}
+        {bidError && (
+          <p className="text-xs text-red-400 font-body text-center mb-2">
+            {bidError}
+          </p>
+        )}
+
         {/* Action buttons */}
         <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={handleBid}
-            className="flex-1 flex items-center justify-center gap-2 bg-lvl-yellow text-lvl-black font-display font-bold text-lg uppercase py-3.5 rounded-xl hover:bg-lvl-yellow/90 active:bg-lvl-yellow/80 transition-colors"
-            aria-label={`Place bid for ${formatPrice(nextBidAmount, auction.currency)}`}
-          >
-            <Gavel size={20} />
-            BID {formatPrice(nextBidAmount, auction.currency)}
-          </button>
+          {user ? (
+            <button
+              type="button"
+              onClick={handleBid}
+              disabled={bidding}
+              className="flex-1 flex items-center justify-center gap-2 bg-lvl-yellow text-lvl-black font-display font-bold text-lg uppercase py-3.5 rounded-xl hover:bg-lvl-yellow/90 active:bg-lvl-yellow/80 disabled:opacity-60 transition-colors"
+              aria-label={`Place bid for ${formatPrice(nextBidAmount, auction.currency)}`}
+            >
+              {bidding ? (
+                <Loader2 size={20} className="animate-spin" />
+              ) : (
+                <Gavel size={20} />
+              )}
+              BID {formatPrice(nextBidAmount, auction.currency)}
+            </button>
+          ) : (
+            <a
+              href="/auth/login"
+              className="flex-1 flex items-center justify-center gap-2 bg-lvl-yellow text-lvl-black font-display font-bold text-lg uppercase py-3.5 rounded-xl hover:bg-lvl-yellow/90 transition-colors"
+            >
+              <Gavel size={20} />
+              SIGN IN TO BID
+            </a>
+          )}
 
           {buyNowPrice !== null && (
             <button

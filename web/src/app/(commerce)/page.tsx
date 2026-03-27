@@ -1,3 +1,6 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, Radio } from "lucide-react";
@@ -6,7 +9,46 @@ import { Badge } from "@/components/ui/badge";
 import { ProductCard } from "@/components/commerce/product-card";
 import { CategoryPills } from "@/components/commerce/category-pills";
 import { formatViewerCount } from "@/lib/utils";
-import { products, categories, streams } from "@/lib/mock-data";
+import {
+  getProducts,
+  getCategories,
+} from "@/lib/supabase-data";
+import {
+  products as mockProducts,
+  categories as mockCategories,
+  streams,
+} from "@/lib/mock-data";
+import type { Product, Category } from "@/types/database";
+
+// ---------------------------------------------------------------------------
+// Skeleton helpers
+// ---------------------------------------------------------------------------
+
+function ProductSkeleton() {
+  return (
+    <div className="bg-lvl-carbon rounded-xl overflow-hidden animate-pulse">
+      <div className="aspect-[4/5] bg-lvl-slate/50" />
+      <div className="p-3 space-y-2">
+        <div className="h-3 w-16 rounded bg-lvl-slate/50" />
+        <div className="h-4 w-full rounded bg-lvl-slate/50" />
+        <div className="h-4 w-20 rounded bg-lvl-slate/50" />
+      </div>
+    </div>
+  );
+}
+
+function CategorySkeleton() {
+  return (
+    <div className="rounded-xl bg-lvl-carbon p-6 animate-pulse">
+      <div className="h-5 w-24 rounded bg-lvl-slate/50" />
+      <div className="mt-2 h-3 w-32 rounded bg-lvl-slate/50" />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Hero
+// ---------------------------------------------------------------------------
 
 function HeroSection() {
   return (
@@ -42,6 +84,10 @@ function HeroSection() {
     </section>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Live Now (still uses mock streams)
+// ---------------------------------------------------------------------------
 
 function LiveNowBanner() {
   const liveStreams = streams.filter((s) => s.status === "live");
@@ -102,8 +148,27 @@ function LiveNowBanner() {
   );
 }
 
-function TrendingSection() {
-  const featured = products.filter((p) => p.is_featured);
+// ---------------------------------------------------------------------------
+// Trending
+// ---------------------------------------------------------------------------
+
+function TrendingSection({ products, loading }: { products: Product[]; loading: boolean }) {
+  if (loading) {
+    return (
+      <section className="mt-12">
+        <h2 className="font-display text-2xl sm:text-3xl uppercase tracking-wider text-lvl-white mb-6">
+          Trending Now
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <ProductSkeleton key={i} />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (products.length === 0) return null;
 
   return (
     <section className="mt-12">
@@ -111,7 +176,7 @@ function TrendingSection() {
         Trending Now
       </h2>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {featured.map((product) => (
+        {products.map((product) => (
           <ProductCard key={product.id} product={product} />
         ))}
       </div>
@@ -119,7 +184,28 @@ function TrendingSection() {
   );
 }
 
-function CategoriesSection() {
+// ---------------------------------------------------------------------------
+// Categories
+// ---------------------------------------------------------------------------
+
+function CategoriesSection({ categories, loading }: { categories: Category[]; loading: boolean }) {
+  if (loading) {
+    return (
+      <section className="mt-12">
+        <h2 className="font-display text-2xl sm:text-3xl uppercase tracking-wider text-lvl-white mb-6">
+          Categories
+        </h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <CategorySkeleton key={i} />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (categories.length === 0) return null;
+
   return (
     <section className="mt-12">
       <h2 className="font-display text-2xl sm:text-3xl uppercase tracking-wider text-lvl-white mb-6">
@@ -147,12 +233,27 @@ function CategoriesSection() {
   );
 }
 
-function NewDropsSection() {
-  const sorted = [...products].sort(
-    (a, b) =>
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  );
-  const latest = sorted.slice(0, 4);
+// ---------------------------------------------------------------------------
+// New Drops
+// ---------------------------------------------------------------------------
+
+function NewDropsSection({ products, loading }: { products: Product[]; loading: boolean }) {
+  if (loading) {
+    return (
+      <section className="mt-12">
+        <h2 className="font-display text-2xl sm:text-3xl uppercase tracking-wider text-lvl-white mb-6">
+          New Drops
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <ProductSkeleton key={i} />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (products.length === 0) return null;
 
   return (
     <section className="mt-12">
@@ -160,7 +261,7 @@ function NewDropsSection() {
         New Drops
       </h2>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {latest.map((product) => (
+        {products.map((product) => (
           <ProductCard key={product.id} product={product} />
         ))}
       </div>
@@ -168,19 +269,85 @@ function NewDropsSection() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
 export default function HomePage() {
+  const [categoriesData, setCategoriesData] = useState<Category[]>([]);
+  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [newDrops, setNewDrops] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const [cats, featured, drops] = await Promise.all([
+          getCategories(),
+          getProducts({ featured: true, limit: 8 }),
+          getProducts({ limit: 8 }),
+        ]);
+
+        if (cancelled) return;
+
+        // Fall back to mock data if Supabase returns empty
+        setCategoriesData(cats.length > 0 ? cats : mockCategories);
+        setFeaturedProducts(
+          featured.length > 0
+            ? featured
+            : mockProducts.filter((p) => p.is_featured)
+        );
+        setNewDrops(
+          drops.length > 0
+            ? drops
+            : [...mockProducts]
+                .sort(
+                  (a, b) =>
+                    new Date(b.created_at).getTime() -
+                    new Date(a.created_at).getTime()
+                )
+                .slice(0, 8)
+        );
+      } catch {
+        // On error, fall back to mock data
+        if (!cancelled) {
+          setCategoriesData(mockCategories);
+          setFeaturedProducts(mockProducts.filter((p) => p.is_featured));
+          setNewDrops(
+            [...mockProducts]
+              .sort(
+                (a, b) =>
+                  new Date(b.created_at).getTime() -
+                  new Date(a.created_at).getTime()
+              )
+              .slice(0, 8)
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-16">
       <div className="pt-6">
-        <CategoryPills categories={categories} />
+        <CategoryPills categories={categoriesData} />
       </div>
       <div className="mt-6">
         <HeroSection />
       </div>
       <LiveNowBanner />
-      <TrendingSection />
-      <CategoriesSection />
-      <NewDropsSection />
+      <TrendingSection products={featuredProducts} loading={loading} />
+      <CategoriesSection categories={categoriesData} loading={loading} />
+      <NewDropsSection products={newDrops} loading={loading} />
     </main>
   );
 }

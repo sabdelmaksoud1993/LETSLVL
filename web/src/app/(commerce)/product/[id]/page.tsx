@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useParams } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { Heart, Minus, Plus, ChevronRight } from "lucide-react";
@@ -10,31 +10,103 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ProductCard } from "@/components/commerce/product-card";
 import { addToCart } from "@/lib/cart-store";
-import { products, categories } from "@/lib/mock-data";
+import { getProduct, getProducts, getCategories, addToWishlist, removeFromWishlist, isInWishlist } from "@/lib/supabase-data";
+import { useAuth } from "@/lib/auth-context";
+import type { Product, Category } from "@/types/database";
+
+function ProductSkeleton() {
+  return (
+    <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-16">
+      <div className="pt-6 pb-6">
+        <div className="h-4 w-48 rounded bg-lvl-slate/50 animate-pulse" />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
+        <div className="aspect-[4/5] rounded-xl bg-lvl-slate/50 animate-pulse" />
+        <div className="space-y-4 animate-pulse">
+          <div className="h-3 w-20 rounded bg-lvl-slate/50" />
+          <div className="h-8 w-64 rounded bg-lvl-slate/50" />
+          <div className="h-6 w-32 rounded bg-lvl-slate/50" />
+          <div className="h-16 w-full rounded bg-lvl-slate/50" />
+          <div className="h-10 w-full rounded bg-lvl-slate/50" />
+          <div className="h-12 w-full rounded bg-lvl-slate/50" />
+        </div>
+      </div>
+    </main>
+  );
+}
 
 export default function ProductPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const { user } = useAuth();
+
+  const [product, setProduct] = useState<Product | null>(null);
+  const [category, setCategory] = useState<Category | null>(null);
+  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+
   const [selectedImage, setSelectedImage] = useState(0);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
 
-  const product = products.find((p) => p.id === params.id);
+  useEffect(() => {
+    let cancelled = false;
 
-  const category = product
-    ? categories.find((c) => c.id === product.category_id)
-    : null;
+    async function load() {
+      setLoading(true);
+      try {
+        const prod = await getProduct(params.id);
+        if (!prod || cancelled) {
+          if (!cancelled) {
+            setNotFound(true);
+            setLoading(false);
+          }
+          return;
+        }
 
-  const relatedProducts = useMemo(() => {
-    if (!product) return [];
-    return products
-      .filter((p) => p.category_id === product.category_id && p.id !== product.id)
-      .slice(0, 4);
-  }, [product]);
+        setProduct(prod);
 
-  if (!product) {
+        // Load category and related products in parallel
+        const [cats, related] = await Promise.all([
+          getCategories(),
+          getProducts({ limit: 4 }),
+        ]);
+
+        if (cancelled) return;
+
+        const cat = cats.find((c) => c.id === prod.category_id) ?? null;
+        setCategory(cat);
+        setRelatedProducts(related.filter((p) => p.id !== prod.id).slice(0, 4));
+
+        // Check wishlist status if user is logged in
+        if (user) {
+          const wishlisted = await isInWishlist(user.id, prod.id);
+          if (!cancelled) setIsWishlisted(wishlisted);
+        }
+      } catch (err) {
+        console.error("Failed to load product:", err);
+        if (!cancelled) setNotFound(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [params.id, user]);
+
+  if (loading) {
+    return <ProductSkeleton />;
+  }
+
+  if (notFound || !product) {
     return (
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 text-center">
         <h1 className="font-display text-3xl uppercase text-lvl-white">
@@ -65,6 +137,28 @@ export default function ProductPage() {
     addToCart(product!, selectedSize, selectedColor);
     setAddedToCart(true);
     setTimeout(() => setAddedToCart(false), 2000);
+  }
+
+  async function handleWishlistToggle() {
+    if (!user) {
+      router.push("/auth/login");
+      return;
+    }
+
+    setWishlistLoading(true);
+    try {
+      if (isWishlisted) {
+        await removeFromWishlist(user.id, product!.id);
+        setIsWishlisted(false);
+      } else {
+        await addToWishlist(user.id, product!.id);
+        setIsWishlisted(true);
+      }
+    } catch (err) {
+      console.error("Wishlist error:", err);
+    } finally {
+      setWishlistLoading(false);
+    }
   }
 
   return (
@@ -289,7 +383,8 @@ export default function ProductPage() {
               variant="outline"
               fullWidth
               size="lg"
-              onClick={() => setIsWishlisted((prev) => !prev)}
+              onClick={handleWishlistToggle}
+              disabled={wishlistLoading}
               className="font-display uppercase tracking-wider"
             >
               <Heart

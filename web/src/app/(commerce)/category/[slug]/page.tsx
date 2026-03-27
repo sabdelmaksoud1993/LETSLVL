@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ChevronDown, SlidersHorizontal } from "lucide-react";
 import { ProductCard } from "@/components/commerce/product-card";
 import { CategoryPills } from "@/components/commerce/category-pills";
-import { products, categories } from "@/lib/mock-data";
+import { getProducts, getCategories } from "@/lib/supabase-data";
+import type { Product, Category } from "@/types/database";
 
 type SortOption = "newest" | "price-low" | "price-high";
 
@@ -24,23 +25,61 @@ const PRICE_RANGES = [
   { label: "Over 1000 AED", min: 1000, max: Infinity },
 ];
 
+function ProductSkeleton() {
+  return (
+    <div className="bg-lvl-carbon rounded-xl overflow-hidden animate-pulse">
+      <div className="aspect-[4/5] bg-lvl-slate/50" />
+      <div className="p-3 space-y-2">
+        <div className="h-3 w-16 rounded bg-lvl-slate/50" />
+        <div className="h-4 w-full rounded bg-lvl-slate/50" />
+        <div className="h-4 w-20 rounded bg-lvl-slate/50" />
+      </div>
+    </div>
+  );
+}
+
 export default function CategoryPage() {
   const params = useParams<{ slug: string }>();
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [priceRange, setPriceRange] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
 
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      try {
+        const [cats, prods] = await Promise.all([
+          getCategories(),
+          getProducts({ category: params.slug }),
+        ]);
+        if (!cancelled) {
+          setCategories(cats);
+          setProducts(prods);
+        }
+      } catch (err) {
+        console.error("Failed to load category data:", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [params.slug]);
+
   const category = categories.find((c) => c.slug === params.slug);
 
   const filteredProducts = useMemo(() => {
-    if (!category) return [];
-
-    const categoryProducts = products.filter(
-      (p) => p.category_id === category.id
-    );
-
     const range = PRICE_RANGES[priceRange];
-    const priceFiltered = categoryProducts.filter(
+    const priceFiltered = products.filter(
       (p) => p.price >= range.min && p.price < range.max
     );
 
@@ -62,9 +101,9 @@ export default function CategoryPage() {
     }
 
     return sorted;
-  }, [category, sortBy, priceRange]);
+  }, [products, sortBy, priceRange]);
 
-  if (!category) {
+  if (!loading && !category && categories.length > 0) {
     return (
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 text-center">
         <h1 className="font-display text-3xl uppercase text-lvl-white">
@@ -92,21 +131,29 @@ export default function CategoryPage() {
 
       {/* Hero heading */}
       <div className="mt-8 mb-6">
-        <h1 className="font-display text-4xl sm:text-5xl uppercase tracking-tight text-lvl-white">
-          {category.name}
-        </h1>
-        {category.description && (
-          <p className="mt-2 text-lvl-smoke font-body text-base">
-            {category.description}
-          </p>
+        {loading ? (
+          <div className="animate-pulse space-y-2">
+            <div className="h-10 w-48 rounded bg-lvl-slate/50" />
+            <div className="h-4 w-64 rounded bg-lvl-slate/50" />
+          </div>
+        ) : (
+          <>
+            <h1 className="font-display text-4xl sm:text-5xl uppercase tracking-tight text-lvl-white">
+              {category?.name ?? params.slug}
+            </h1>
+            {category?.description && (
+              <p className="mt-2 text-lvl-smoke font-body text-base">
+                {category.description}
+              </p>
+            )}
+          </>
         )}
       </div>
 
       {/* Filter bar */}
       <div className="flex items-center justify-between gap-4 mb-6">
         <p className="text-lvl-smoke text-sm font-body">
-          {filteredProducts.length} product
-          {filteredProducts.length !== 1 ? "s" : ""}
+          {loading ? "..." : `${filteredProducts.length} product${filteredProducts.length !== 1 ? "s" : ""}`}
         </p>
 
         <div className="flex items-center gap-3">
@@ -182,7 +229,13 @@ export default function CategoryPage() {
       )}
 
       {/* Product grid */}
-      {filteredProducts.length > 0 ? (
+      {loading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <ProductSkeleton key={i} />
+          ))}
+        </div>
+      ) : filteredProducts.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {filteredProducts.map((product) => (
             <ProductCard key={product.id} product={product} />

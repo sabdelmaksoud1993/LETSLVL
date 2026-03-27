@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
   CreditCard,
   Banknote,
@@ -10,10 +11,14 @@ import {
   ChevronRight,
   Check,
   ShoppingBag,
+  CheckCircle,
+  LogIn,
 } from "lucide-react";
 import { cn, formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { getCartItems, getCartTotal, type CartEntry } from "@/lib/cart-store";
+import { getCartItems, clearCart, type CartEntry } from "@/lib/cart-store";
+import { createOrder } from "@/lib/supabase-data";
+import { useAuth } from "@/lib/auth-context";
 
 type Step = 1 | 2 | 3;
 type PaymentMethod = "card" | "cod" | "tabby";
@@ -132,11 +137,17 @@ function InputField({
 }
 
 export default function CheckoutPage() {
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+
   const [step, setStep] = useState<Step>(1);
   const [shipping, setShipping] = useState<ShippingForm>(INITIAL_SHIPPING);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [items, setItems] = useState<CartEntry[]>([]);
   const [mounted, setMounted] = useState(false);
+  const [placingOrder, setPlacingOrder] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
+  const [orderNumber, setOrderNumber] = useState<string | null>(null);
 
   const refreshCart = useCallback(() => {
     setItems(getCartItems());
@@ -159,12 +170,124 @@ export default function CheckoutPage() {
     subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_COST;
   const total = subtotal + shippingCost;
 
+  async function handlePlaceOrder() {
+    if (!user) {
+      router.push("/auth/login");
+      return;
+    }
+
+    setPlacingOrder(true);
+    setOrderError(null);
+
+    try {
+      const orderItems = items.map((item) => ({
+        product_id: item.product.id,
+        title: item.product.title,
+        image: item.product.images[0] ?? "",
+        price: item.product.price,
+        quantity: item.quantity,
+        size: item.size,
+        color: item.color,
+      }));
+
+      const order = await createOrder({
+        user_id: user.id,
+        items: orderItems,
+        subtotal,
+        shipping: shippingCost,
+        total,
+        shipping_address: {
+          full_name: shipping.fullName,
+          phone: shipping.phone,
+          line1: shipping.line1,
+          line2: shipping.line2 || null,
+          city: shipping.city,
+          state: "",
+          country: shipping.country,
+          postal_code: "",
+        },
+        payment_method: paymentMethod,
+      });
+
+      clearCart();
+      setOrderNumber((order as unknown as Record<string, unknown>).order_number as string ?? order.id);
+    } catch (err) {
+      setOrderError(
+        err instanceof Error ? err.message : "Failed to place order. Please try again."
+      );
+    } finally {
+      setPlacingOrder(false);
+    }
+  }
+
   if (!mounted) {
     return (
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16">
         <div className="animate-pulse space-y-4">
           <div className="h-8 w-48 rounded bg-lvl-carbon mx-auto" />
           <div className="h-96 rounded-xl bg-lvl-carbon" />
+        </div>
+      </main>
+    );
+  }
+
+  // Auth gate
+  if (!authLoading && !user) {
+    return (
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 text-center">
+        <LogIn className="mx-auto h-16 w-16 text-lvl-slate" />
+        <h1 className="mt-6 font-display text-3xl uppercase text-lvl-white">
+          Sign in to Checkout
+        </h1>
+        <p className="mt-2 text-lvl-smoke font-body">
+          You need to be logged in to place an order.
+        </p>
+        <Link href="/auth/login" className="mt-8 inline-block">
+          <Button
+            variant="primary"
+            size="lg"
+            className="font-display uppercase tracking-wider"
+          >
+            Sign In
+          </Button>
+        </Link>
+      </main>
+    );
+  }
+
+  // Order confirmation
+  if (orderNumber) {
+    return (
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 text-center">
+        <CheckCircle className="mx-auto h-20 w-20 text-lvl-success" />
+        <h1 className="mt-6 font-display text-3xl sm:text-4xl uppercase text-lvl-white">
+          Order Placed!
+        </h1>
+        <p className="mt-2 text-lvl-smoke font-body">
+          Thank you for your order.
+        </p>
+        <p className="mt-4 font-display text-xl text-lvl-yellow">
+          {orderNumber}
+        </p>
+        <div className="mt-8 flex flex-wrap gap-3 justify-center">
+          <Link href="/account/orders">
+            <Button
+              variant="outline"
+              size="lg"
+              className="font-display uppercase tracking-wider"
+            >
+              View Orders
+            </Button>
+          </Link>
+          <Link href="/">
+            <Button
+              variant="primary"
+              size="lg"
+              className="font-display uppercase tracking-wider"
+            >
+              Continue Shopping
+            </Button>
+          </Link>
         </div>
       </main>
     );
@@ -575,21 +698,31 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
+              {/* Error message */}
+              {orderError && (
+                <div className="rounded-xl bg-red-500/10 border border-red-500/30 p-4">
+                  <p className="text-red-400 text-sm font-body">{orderError}</p>
+                </div>
+              )}
+
               <div className="flex justify-between">
                 <Button
                   variant="outline"
                   size="lg"
                   onClick={() => setStep(2)}
                   className="font-display uppercase tracking-wider"
+                  disabled={placingOrder}
                 >
                   Back
                 </Button>
                 <Button
                   variant="primary"
                   size="lg"
+                  onClick={handlePlaceOrder}
+                  disabled={placingOrder}
                   className="font-display uppercase tracking-wider"
                 >
-                  Place Order
+                  {placingOrder ? "PLACING ORDER..." : "PLACE ORDER"}
                 </Button>
               </div>
             </div>

@@ -10,13 +10,12 @@ import {
   Archive,
   Package,
   ChevronDown,
+  LogIn,
 } from "lucide-react";
 import { cn, formatPrice } from "@/lib/utils";
-import {
-  getSellerProducts,
-  deleteSellerProduct,
-  type SellerProduct,
-} from "@/lib/seller-store";
+import { getSellerProducts, archiveProduct } from "@/lib/supabase-data";
+import { useAuth } from "@/lib/auth-context";
+import type { Product } from "@/types/database";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,25 +29,31 @@ type SortKey = "newest" | "price" | "stock";
 // ---------------------------------------------------------------------------
 
 export default function SellerProductsPage() {
-  const [products, setProducts] = useState<readonly SellerProduct[]>([]);
+  const { user, loading: authLoading } = useAuth();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortBy, setSortBy] = useState<SortKey>("newest");
   const [showSortMenu, setShowSortMenu] = useState(false);
 
-  // ---- load & listen for changes --------------------------------------------
+  // ---- load from Supabase ---------------------------------------------------
 
-  const loadProducts = useCallback(() => {
-    setProducts(getSellerProducts());
-  }, []);
+  const loadProducts = useCallback(async () => {
+    if (!user) return;
+    try {
+      const data = await getSellerProducts(user.id);
+      setProducts(data);
+    } catch (err) {
+      console.error("Failed to load seller products:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
 
   useEffect(() => {
-    loadProducts();
-
-    const handler = () => loadProducts();
-    window.addEventListener("seller-products-updated", handler);
-    return () => window.removeEventListener("seller-products-updated", handler);
-  }, [loadProducts]);
+    if (user) loadProducts();
+  }, [user, loadProducts]);
 
   // ---- counts per status ----------------------------------------------------
 
@@ -101,10 +106,14 @@ export default function SellerProductsPage() {
   // ---- archive handler ------------------------------------------------------
 
   const handleArchive = useCallback(
-    (id: string, name: string) => {
+    async (id: string, name: string) => {
       if (window.confirm(`Archive "${name}"? It will no longer be visible to buyers.`)) {
-        deleteSellerProduct(id);
-        loadProducts();
+        try {
+          await archiveProduct(id);
+          await loadProducts();
+        } catch (err) {
+          console.error("Failed to archive product:", err);
+        }
       }
     },
     [loadProducts]
@@ -118,6 +127,28 @@ export default function SellerProductsPage() {
     { key: "draft", label: "Draft" },
     { key: "archived", label: "Archived" },
   ];
+
+  // ---- auth gate ------------------------------------------------------------
+
+  if (!authLoading && !user) {
+    return (
+      <div className="min-h-screen bg-lvl-black px-4 py-8 max-w-4xl mx-auto text-center">
+        <LogIn className="mx-auto h-16 w-16 text-lvl-slate" />
+        <h1 className="mt-6 font-display text-3xl font-bold tracking-wider">
+          SIGN IN TO MANAGE <span className="text-lvl-yellow">PRODUCTS</span>
+        </h1>
+        <p className="mt-2 text-lvl-smoke font-body text-sm">
+          You need to be logged in to manage your products.
+        </p>
+        <Link
+          href="/auth/login"
+          className="mt-6 inline-block bg-lvl-yellow text-lvl-black font-display uppercase tracking-widest py-3 px-8 rounded-lg font-bold hover:opacity-90 transition-opacity text-sm"
+        >
+          Sign In
+        </Link>
+      </div>
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // Render
@@ -227,7 +258,19 @@ export default function SellerProductsPage() {
       </div>
 
       {/* Product List */}
-      {filtered.length === 0 ? (
+      {loading || authLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="bg-lvl-carbon rounded-xl p-4 flex items-center gap-4 animate-pulse">
+              <div className="w-14 h-14 rounded-lg bg-lvl-slate/50 shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-40 rounded bg-lvl-slate/50" />
+                <div className="h-3 w-24 rounded bg-lvl-slate/50" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <Package className="w-16 h-16 text-lvl-slate mb-4" />
           <p className="font-display text-lg font-bold tracking-wide mb-1">

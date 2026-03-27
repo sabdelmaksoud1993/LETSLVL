@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -8,28 +8,17 @@ import {
   ChevronUp,
   Package,
   ShoppingBag,
+  LogIn,
 } from "lucide-react";
 import { cn, formatPrice } from "@/lib/utils";
+import { getUserOrders } from "@/lib/supabase-data";
+import { useAuth } from "@/lib/auth-context";
+import type { Order } from "@/types/database";
 
-type OrderStatus = "placed" | "confirmed" | "shipped" | "delivered";
-
-interface OrderItem {
-  readonly name: string;
-  readonly image: string;
-  readonly price: number;
-  readonly quantity: number;
-}
-
-interface Order {
-  readonly id: string;
-  readonly date: string;
-  readonly status: OrderStatus;
-  readonly total: number;
-  readonly items: readonly OrderItem[];
-}
+type OrderStatus = "placed" | "confirmed" | "packed" | "shipped" | "delivered" | "returned";
 
 const STATUS_CONFIG: Record<
-  OrderStatus,
+  string,
   { label: string; className: string }
 > = {
   placed: {
@@ -40,6 +29,10 @@ const STATUS_CONFIG: Record<
     label: "Confirmed",
     className: "bg-blue-500/20 text-blue-400 border-blue-500/40",
   },
+  packed: {
+    label: "Packed",
+    className: "bg-purple-500/20 text-purple-400 border-purple-500/40",
+  },
   shipped: {
     label: "Shipped",
     className: "bg-orange-500/20 text-orange-400 border-orange-500/40",
@@ -48,67 +41,14 @@ const STATUS_CONFIG: Record<
     label: "Delivered",
     className: "bg-green-500/20 text-green-400 border-green-500/40",
   },
+  returned: {
+    label: "Returned",
+    className: "bg-red-500/20 text-red-400 border-red-500/40",
+  },
 };
 
-const MOCK_ORDERS: readonly Order[] = [
-  {
-    id: "LVL-20260301",
-    date: "2026-03-01",
-    status: "delivered",
-    total: 1250,
-    items: [
-      {
-        name: "Pokemon Booster Box - Scarlet & Violet",
-        image: "/placeholder.jpg",
-        price: 850,
-        quantity: 1,
-      },
-      {
-        name: "Card Sleeves Ultra Pro x100",
-        image: "/placeholder.jpg",
-        price: 400,
-        quantity: 1,
-      },
-    ],
-  },
-  {
-    id: "LVL-20260315",
-    date: "2026-03-15",
-    status: "shipped",
-    total: 2100,
-    items: [
-      {
-        name: "One Piece TCG Display Box",
-        image: "/placeholder.jpg",
-        price: 2100,
-        quantity: 1,
-      },
-    ],
-  },
-  {
-    id: "LVL-20260325",
-    date: "2026-03-25",
-    status: "placed",
-    total: 680,
-    items: [
-      {
-        name: "Yu-Gi-Oh! Structure Deck",
-        image: "/placeholder.jpg",
-        price: 180,
-        quantity: 2,
-      },
-      {
-        name: "Deck Protector Binder",
-        image: "/placeholder.jpg",
-        price: 320,
-        quantity: 1,
-      },
-    ],
-  },
-];
-
-function StatusBadge({ status }: { status: OrderStatus }) {
-  const config = STATUS_CONFIG[status];
+function StatusBadge({ status }: { status: string }) {
+  const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.placed;
   return (
     <span
       className={cn(
@@ -124,6 +64,9 @@ function StatusBadge({ status }: { status: OrderStatus }) {
 function OrderCard({ order }: { order: Order }) {
   const [expanded, setExpanded] = useState(false);
 
+  const orderNumber = (order as unknown as Record<string, unknown>).order_number as string | undefined;
+  const displayId = orderNumber ?? order.id;
+
   return (
     <div className="bg-lvl-carbon rounded-xl overflow-hidden">
       {/* Header row */}
@@ -135,12 +78,12 @@ function OrderCard({ order }: { order: Order }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-1">
             <p className="font-display text-sm font-bold tracking-wide">
-              {order.id}
+              {displayId}
             </p>
             <StatusBadge status={order.status} />
           </div>
           <p className="text-lvl-smoke text-xs font-body">
-            {new Date(order.date).toLocaleDateString("en-US", {
+            {new Date(order.created_at).toLocaleDateString("en-US", {
               year: "numeric",
               month: "long",
               day: "numeric",
@@ -149,7 +92,7 @@ function OrderCard({ order }: { order: Order }) {
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <p className="font-display font-bold text-sm">
-            {formatPrice(order.total)}
+            {formatPrice(order.total, order.currency)}
           </p>
           {expanded ? (
             <ChevronUp className="w-4 h-4 text-lvl-smoke" />
@@ -162,13 +105,13 @@ function OrderCard({ order }: { order: Order }) {
       {/* Expanded items */}
       {expanded && (
         <div className="border-t border-lvl-slate/40 p-4 space-y-3">
-          {order.items.map((item, idx) => (
+          {(order.items ?? []).map((item, idx) => (
             <div key={idx} className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-lg bg-lvl-slate shrink-0 flex items-center justify-center">
                 <Package className="w-5 h-5 text-lvl-smoke" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-body truncate">{item.name}</p>
+                <p className="text-sm font-body truncate">{item.title}</p>
                 <p className="text-lvl-smoke text-xs font-body">
                   Qty: {item.quantity}
                 </p>
@@ -178,14 +121,86 @@ function OrderCard({ order }: { order: Order }) {
               </p>
             </div>
           ))}
+
+          {order.tracking_number && (
+            <div className="pt-2 border-t border-lvl-slate/40">
+              <p className="text-lvl-smoke text-xs font-body">
+                Tracking: <span className="text-lvl-white">{order.tracking_number}</span>
+                {order.carrier && ` (${order.carrier})`}
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
+function OrdersSkeleton() {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="bg-lvl-carbon rounded-xl p-4 animate-pulse">
+          <div className="flex items-center justify-between">
+            <div className="space-y-2">
+              <div className="h-4 w-32 rounded bg-lvl-slate/50" />
+              <div className="h-3 w-24 rounded bg-lvl-slate/50" />
+            </div>
+            <div className="h-4 w-20 rounded bg-lvl-slate/50" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function OrdersPage() {
-  const orders = MOCK_ORDERS;
+  const { user, loading: authLoading } = useAuth();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const data = await getUserOrders(user!.id);
+        if (!cancelled) setOrders(data);
+      } catch (err) {
+        console.error("Failed to load orders:", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  // Auth gate
+  if (!authLoading && !user) {
+    return (
+      <div className="min-h-screen bg-lvl-black px-4 py-8 max-w-2xl mx-auto text-center">
+        <LogIn className="mx-auto h-16 w-16 text-lvl-slate" />
+        <h1 className="mt-6 font-display text-3xl font-bold tracking-wider">
+          SIGN IN TO VIEW <span className="text-lvl-yellow">ORDERS</span>
+        </h1>
+        <p className="mt-2 text-lvl-smoke font-body text-sm">
+          You need to be logged in to see your order history.
+        </p>
+        <Link
+          href="/auth/login"
+          className="mt-6 inline-block bg-lvl-yellow text-lvl-black font-display uppercase tracking-widest py-3 px-8 rounded-lg font-bold hover:opacity-90 transition-opacity text-sm"
+        >
+          Sign In
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-lvl-black px-4 py-8 max-w-2xl mx-auto">
@@ -202,7 +217,9 @@ export default function OrdersPage() {
         MY <span className="text-lvl-yellow">ORDERS</span>
       </h1>
 
-      {orders.length === 0 ? (
+      {loading || authLoading ? (
+        <OrdersSkeleton />
+      ) : orders.length === 0 ? (
         /* Empty state */
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <ShoppingBag className="w-16 h-16 text-lvl-slate mb-4" />

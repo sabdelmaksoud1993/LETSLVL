@@ -1,26 +1,17 @@
 "use client";
 
-import { useState, useCallback, type FormEvent, type KeyboardEvent } from "react";
+import { useState, useEffect, useCallback, type FormEvent, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, X, Plus, Image as ImageIcon } from "lucide-react";
+import { ArrowLeft, X, Plus, Image as ImageIcon, LogIn } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { createSellerProduct, type SellerProduct } from "@/lib/seller-store";
+import { createProduct, getCategories } from "@/lib/supabase-data";
+import { useAuth } from "@/lib/auth-context";
+import type { Category } from "@/types/database";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const CATEGORIES = [
-  "Streetwear",
-  "Vintage",
-  "Sneakers",
-  "Trading Card Games",
-  "Sports Cards",
-  "Activewear",
-  "Accessories",
-  "Toys & Collectibles",
-] as const;
 
 const CURRENCIES = ["AED", "SAR", "KWD"] as const;
 
@@ -39,6 +30,10 @@ const CHIP_CLS =
 
 export default function AddProductPage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+
+  // Categories from DB
+  const [dbCategories, setDbCategories] = useState<Category[]>([]);
 
   // Basic info
   const [title, setTitle] = useState("");
@@ -51,7 +46,7 @@ export default function AddProductPage() {
   const [currency, setCurrency] = useState<string>("AED");
 
   // Category
-  const [category, setCategory] = useState<string>("");
+  const [categoryId, setCategoryId] = useState<string>("");
 
   // Inventory
   const [sku, setSku] = useState("");
@@ -74,10 +69,22 @@ export default function AddProductPage() {
   // Validation
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // ---- load categories -------------------------------------------------------
+
+  useEffect(() => {
+    async function load() {
+      const cats = await getCategories();
+      setDbCategories(cats);
+    }
+    load();
+  }, []);
 
   // ---- size helpers ---------------------------------------------------------
 
-  const isShoeSizeCategory = category === "Sneakers";
+  const selectedCategory = dbCategories.find((c) => c.id === categoryId);
+  const isShoeSizeCategory = selectedCategory?.slug === "sneakers";
   const availableSizes = isShoeSizeCategory ? SHOE_SIZES : CLOTHING_SIZES;
 
   const toggleSize = useCallback(
@@ -147,56 +154,73 @@ export default function AddProductPage() {
     const next: Record<string, string> = {};
     if (!title.trim()) next.title = "Title is required";
     if (!price || Number(price) <= 0) next.price = "A valid price is required";
-    if (!category) next.category = "Select a category";
+    if (!categoryId) next.category = "Select a category";
     setErrors(next);
     return Object.keys(next).length === 0;
-  }, [title, price, category]);
+  }, [title, price, categoryId]);
+
+  // ---- slug helper ----------------------------------------------------------
+
+  function generateSlug(text: string): string {
+    return text
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
 
   // ---- submit ---------------------------------------------------------------
 
   const handleSubmit = useCallback(
-    (publishStatus: "active" | "draft") => {
-      if (!validate()) return;
+    async (publishStatus: "active" | "draft") => {
+      if (!validate() || !user) return;
       setSubmitting(true);
+      setSubmitError(null);
 
       const filteredImages = images.filter((u) => u.trim() !== "");
 
-      const data: Omit<SellerProduct, "id" | "created_at" | "updated_at"> = {
-        title: title.trim(),
-        description: description.trim(),
-        brand: brand.trim(),
-        price: Number(price),
-        compare_at_price: compareAtPrice ? Number(compareAtPrice) : null,
-        currency,
-        category,
-        images: filteredImages,
-        sizes: [...selectedSizes],
-        colors: [...colors],
-        tags: [...tags],
-        inventory_count: inventoryCount ? Number(inventoryCount) : 0,
-        sku: sku.trim(),
-        status: publishStatus,
-        is_live_exclusive: isLiveExclusive,
-      };
-
-      createSellerProduct(data);
-      router.push("/seller/products");
+      try {
+        await createProduct({
+          title: title.trim(),
+          slug: generateSlug(title),
+          description: description.trim(),
+          brand: brand.trim(),
+          price: Number(price),
+          compare_at_price: compareAtPrice ? Number(compareAtPrice) : null,
+          currency,
+          category_id: categoryId,
+          images: filteredImages,
+          sizes: [...selectedSizes],
+          colors: [...colors],
+          tags: [...tags],
+          inventory_count: inventoryCount ? Number(inventoryCount) : 0,
+          status: publishStatus,
+          is_live_exclusive: isLiveExclusive,
+          is_featured: false,
+          seller_id: user.id,
+        });
+        router.push("/seller/products");
+      } catch (err) {
+        setSubmitError(
+          err instanceof Error ? err.message : "Failed to create product. Please try again."
+        );
+        setSubmitting(false);
+      }
     },
     [
       validate,
+      user,
       title,
       description,
       brand,
       price,
       compareAtPrice,
       currency,
-      category,
+      categoryId,
       images,
       selectedSizes,
       colors,
       tags,
       inventoryCount,
-      sku,
       isLiveExclusive,
       router,
     ]
@@ -227,6 +251,25 @@ export default function AddProductPage() {
     },
     [addChip]
   );
+
+  // ---- auth gate ------------------------------------------------------------
+
+  if (!authLoading && !user) {
+    return (
+      <div className="min-h-screen bg-lvl-black px-4 py-8 max-w-3xl mx-auto text-center">
+        <LogIn className="mx-auto h-16 w-16 text-lvl-slate" />
+        <h1 className="mt-6 font-display text-3xl font-bold tracking-wider">
+          SIGN IN TO ADD <span className="text-lvl-yellow">PRODUCTS</span>
+        </h1>
+        <Link
+          href="/auth/login"
+          className="mt-6 inline-block bg-lvl-yellow text-lvl-black font-display uppercase tracking-widest py-3 px-8 rounded-lg font-bold hover:opacity-90 transition-opacity text-sm"
+        >
+          Sign In
+        </Link>
+      </div>
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // Render
@@ -374,9 +417,9 @@ export default function AddProductPage() {
               Category <span className="text-red-400">*</span>
             </label>
             <select
-              value={category}
+              value={categoryId}
               onChange={(e) => {
-                setCategory(e.target.value);
+                setCategoryId(e.target.value);
                 setSelectedSizes([]);
               }}
               className={cn(
@@ -385,9 +428,9 @@ export default function AddProductPage() {
               )}
             >
               <option value="">Select a category</option>
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
+              {dbCategories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
                 </option>
               ))}
             </select>
@@ -664,6 +707,13 @@ export default function AddProductPage() {
           </div>
         </section>
 
+        {/* Error */}
+        {submitError && (
+          <div className="rounded-xl bg-red-500/10 border border-red-500/30 p-4">
+            <p className="text-red-400 text-sm font-body">{submitError}</p>
+          </div>
+        )}
+
         {/* ── Actions ──────────────────────────────────────────────────────── */}
         <div className="flex items-center gap-3 pt-2">
           <button
@@ -679,7 +729,7 @@ export default function AddProductPage() {
             disabled={submitting}
             className="flex-1 py-3 rounded-lg font-display font-bold text-sm tracking-widest uppercase bg-lvl-yellow text-lvl-black hover:opacity-90 transition-opacity disabled:opacity-50"
           >
-            PUBLISH PRODUCT
+            {submitting ? "PUBLISHING..." : "PUBLISH PRODUCT"}
           </button>
         </div>
       </form>

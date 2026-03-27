@@ -1,66 +1,19 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Send } from "lucide-react";
+import { Send, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth-context";
+import {
+  fetchChatMessages,
+  subscribeToChatMessages,
+  sendChatMessage,
+} from "@/lib/realtime";
 import type { ChatMessage } from "@/types/database";
 
 interface ChatOverlayProps {
   streamId: string;
 }
-
-const INITIAL_MESSAGES: readonly ChatMessage[] = [
-  {
-    id: "cm1",
-    stream_id: "st1",
-    user_id: "u1",
-    user_name: "Ahmed_AE",
-    user_avatar: null,
-    message: "Just joined! What's up for auction?",
-    created_at: new Date(Date.now() - 120000).toISOString(),
-    is_seller: false,
-  },
-  {
-    id: "cm2",
-    stream_id: "st1",
-    user_id: "s4",
-    user_name: "Pop Haven QA",
-    user_avatar: null,
-    message: "Welcome everyone! Starting with One Piece cards",
-    created_at: new Date(Date.now() - 90000).toISOString(),
-    is_seller: true,
-  },
-  {
-    id: "cm3",
-    stream_id: "st1",
-    user_id: "u2",
-    user_name: "DxBCollector",
-    user_avatar: null,
-    message: "Do you have Gear 5 Luffy alt art?",
-    created_at: new Date(Date.now() - 60000).toISOString(),
-    is_seller: false,
-  },
-  {
-    id: "cm4",
-    stream_id: "st1",
-    user_id: "u3",
-    user_name: "KarenTCG",
-    user_avatar: null,
-    message: "That Zoro card is fire!!",
-    created_at: new Date(Date.now() - 45000).toISOString(),
-    is_seller: false,
-  },
-  {
-    id: "cm5",
-    stream_id: "st1",
-    user_id: "s4",
-    user_name: "Pop Haven QA",
-    user_avatar: null,
-    message: "Yes! Gear 5 coming up next. Stay tuned",
-    created_at: new Date(Date.now() - 30000).toISOString(),
-    is_seller: true,
-  },
-] as const;
 
 function formatChatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -68,18 +21,39 @@ function formatChatTime(dateStr: string): string {
 }
 
 function ChatOverlay({ streamId }: ChatOverlayProps) {
+  const { user, profile } = useAuth();
   const [messages, setMessages] = useState<readonly ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Load initial messages and subscribe to new ones
   useEffect(() => {
-    const messagesForStream = INITIAL_MESSAGES.map((msg) => ({
-      ...msg,
-      stream_id: streamId,
-    }));
-    setMessages(messagesForStream);
+    let unsubscribe: (() => void) | null = null;
+
+    async function init() {
+      setLoading(true);
+      const initial = await fetchChatMessages(streamId);
+      setMessages(initial);
+      setLoading(false);
+
+      // Subscribe to new messages
+      unsubscribe = subscribeToChatMessages(streamId, (newMsg) => {
+        setMessages((prev) => [...prev, newMsg]);
+      });
+    }
+
+    init();
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [streamId]);
 
+  // Auto-scroll to bottom when messages change
   useEffect(() => {
     const container = scrollRef.current;
     if (container) {
@@ -87,24 +61,23 @@ function ChatOverlay({ streamId }: ChatOverlayProps) {
     }
   }, [messages]);
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     const trimmed = inputValue.trim();
-    if (trimmed.length === 0) return;
+    if (trimmed.length === 0 || !user) return;
 
-    const newMessage: ChatMessage = {
-      id: `cm-${Date.now()}`,
-      stream_id: streamId,
-      user_id: "me",
-      user_name: "You",
-      user_avatar: null,
-      message: trimmed,
-      created_at: new Date().toISOString(),
-      is_seller: false,
-    };
-
-    setMessages((prev) => [...prev, newMessage]);
+    setSending(true);
     setInputValue("");
-  }, [inputValue, streamId]);
+
+    try {
+      await sendChatMessage(streamId, user.id, trimmed);
+    } catch (err) {
+      console.error("Failed to send message:", err);
+      // Restore input on failure
+      setInputValue(trimmed);
+    } finally {
+      setSending(false);
+    }
+  }, [inputValue, streamId, user]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -126,67 +99,95 @@ function ChatOverlay({ streamId }: ChatOverlayProps) {
         aria-label="Live chat messages"
         aria-live="polite"
       >
-        {messages.map((msg) => (
-          <div key={msg.id} className="flex items-start gap-2">
-            {/* Avatar */}
-            <div
-              className={cn(
-                "h-7 w-7 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold",
-                msg.is_seller
-                  ? "bg-lvl-yellow text-lvl-black"
-                  : "bg-lvl-slate text-lvl-white",
-              )}
-            >
-              {msg.user_name.charAt(0).toUpperCase()}
-            </div>
-
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span
-                  className={cn(
-                    "text-xs font-bold font-body",
-                    msg.is_seller ? "text-lvl-yellow" : "text-white",
-                  )}
-                >
-                  {msg.user_name}
-                </span>
-                {msg.is_seller && (
-                  <span className="text-[9px] bg-lvl-yellow text-lvl-black px-1.5 py-0.5 rounded font-bold uppercase">
-                    Seller
-                  </span>
-                )}
-                <span className="text-[10px] text-white/40 font-body">
-                  {formatChatTime(msg.created_at)}
-                </span>
-              </div>
-              <p className="text-sm text-white/90 font-body leading-snug mt-0.5">
-                {msg.message}
-              </p>
-            </div>
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 size={20} className="animate-spin text-lvl-smoke" />
           </div>
-        ))}
+        ) : messages.length === 0 ? (
+          <p className="text-center text-white/40 text-sm font-body py-8">
+            No messages yet. Be the first to chat!
+          </p>
+        ) : (
+          messages.map((msg) => (
+            <div key={msg.id} className="flex items-start gap-2">
+              {/* Avatar */}
+              <div
+                className={cn(
+                  "h-7 w-7 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold",
+                  msg.is_seller
+                    ? "bg-lvl-yellow text-lvl-black"
+                    : "bg-lvl-slate text-lvl-white",
+                )}
+              >
+                {msg.user_name.charAt(0).toUpperCase()}
+              </div>
+
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={cn(
+                      "text-xs font-bold font-body",
+                      msg.is_seller ? "text-lvl-yellow" : "text-white",
+                    )}
+                  >
+                    {msg.user_name}
+                  </span>
+                  {msg.is_seller && (
+                    <span className="text-[9px] bg-lvl-yellow text-lvl-black px-1.5 py-0.5 rounded font-bold uppercase">
+                      Seller
+                    </span>
+                  )}
+                  <span className="text-[10px] text-white/40 font-body">
+                    {formatChatTime(msg.created_at)}
+                  </span>
+                </div>
+                <p className="text-sm text-white/90 font-body leading-snug mt-0.5">
+                  {msg.message}
+                </p>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {/* Input */}
       <div className="mt-2 flex items-center gap-2">
-        <input
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Say something..."
-          className="flex-1 bg-lvl-slate rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/40 font-body focus:outline-none focus:ring-2 focus:ring-lvl-yellow/50"
-          aria-label="Chat message input"
-        />
-        <button
-          type="button"
-          onClick={handleSend}
-          disabled={inputValue.trim().length === 0}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-lvl-yellow text-lvl-black shrink-0 hover:bg-lvl-yellow/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          aria-label="Send message"
-        >
-          <Send size={18} />
-        </button>
+        {user ? (
+          <>
+            <input
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Say something..."
+              disabled={sending}
+              className="flex-1 bg-lvl-slate rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/40 font-body focus:outline-none focus:ring-2 focus:ring-lvl-yellow/50 disabled:opacity-60"
+              aria-label="Chat message input"
+            />
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={inputValue.trim().length === 0 || sending}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-lvl-yellow text-lvl-black shrink-0 hover:bg-lvl-yellow/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              aria-label="Send message"
+            >
+              {sending ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Send size={18} />
+              )}
+            </button>
+          </>
+        ) : (
+          <div className="flex-1 bg-lvl-slate/50 rounded-full px-4 py-2.5 text-center">
+            <a
+              href="/auth/login"
+              className="text-sm text-lvl-yellow font-body font-semibold hover:underline"
+            >
+              Sign in to chat
+            </a>
+          </div>
+        )}
       </div>
     </div>
   );
