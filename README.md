@@ -4,6 +4,25 @@
 
 Fashion + Merchandise + Live Auctions | Dubai, UAE | 2025
 
+**Live:** [https://letslvl.vercel.app](https://letslvl.vercel.app)
+
+**Tech Stack:** Next.js 16 + TypeScript + Tailwind CSS v4 + Supabase
+
+---
+
+## Quick Start
+
+```bash
+cd web
+npm install
+npm run dev
+# Open http://localhost:3000
+```
+
+### Environment Variables
+
+Copy `.env.example` to `.env.local` and fill in your Supabase and Stripe keys.
+
 ---
 
 ## Vision
@@ -756,13 +775,34 @@ Month 9:   Public Launch (UAE) -> expand to KSA
 
 ```
 LETSLVL/
-├── README.md                    # This file — full V-model SDLC plan
+├── README.md                          # Full V-model SDLC plan + project docs
 ├── docs/
-│   ├── BRAND_GUIDELINES.md      # Complete brand guidelines for development
-│   └── LetsLVL_BrandBook.pdf    # Original brand book PDF
-├── src/                         # Application source code (TBD)
-├── packages/                    # Shared packages (TBD)
-└── infrastructure/              # AWS/Terraform configs (TBD)
+│   ├── BRAND_GUIDELINES.md            # Brand guidelines for development
+│   └── LetsLVL_BrandBook.pdf          # Original brand book PDF
+└── web/                               # Next.js 16 web application
+    ├── src/
+    │   ├── app/
+    │   │   ├── (commerce)/            # Fashion e-commerce pages
+    │   │   │   ├── page.tsx           # Homepage
+    │   │   │   ├── category/[slug]/   # Category browse
+    │   │   │   ├── product/[id]/      # Product detail
+    │   │   │   ├── cart/              # Shopping cart
+    │   │   │   └── checkout/          # Checkout flow
+    │   │   ├── live/                  # Live auction tab (Trofee-style)
+    │   │   │   ├── page.tsx           # Live stream feed
+    │   │   │   └── stream/[id]/       # Individual stream viewer
+    │   │   ├── account/               # User account, orders, wishlist
+    │   │   ├── seller/                # Seller dashboard, go-live, products
+    │   │   └── auth/                  # Login, register
+    │   ├── components/
+    │   │   ├── ui/                    # Button, Badge, Input, Modal
+    │   │   ├── commerce/              # ProductCard, CategoryPills
+    │   │   ├── live/                  # StreamCard, ChatOverlay, AuctionPanel
+    │   │   ├── layout/                # Header, Footer, BottomNav
+    │   │   └── seller/                # Seller-specific components
+    │   ├── lib/                       # Supabase client, cart store, utils
+    │   └── types/                     # TypeScript type definitions
+    └── public/                        # Static assets
 ```
 
 ---

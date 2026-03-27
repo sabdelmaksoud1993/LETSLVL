@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@theme {
+  /* LVL Brand Colors — Primary */
+  --color-lvl-yellow: #F5C518;
+  --color-lvl-black: #0A0A0A;
+  --color-lvl-white: #FFFFFF;
+
+  /* LVL Brand Colors — Secondary */
+  --color-lvl-carbon: #1A1A1A;
+  --color-lvl-slate: #2D2D2D;
+  --color-lvl-smoke: #AAAAAA;
+
+  /* Semantic Colors */
+  --color-lvl-success: #22C55E;
+  --color-lvl-error: #EF4444;
+  --color-lvl-warning: #F59E0B;
+  --color-lvl-live: #EF4444;
+
+  /* Font Families */
+  --font-display: "Oswald", "Arial Narrow", sans-serif;
+  --font-body: "Poppins", sans-serif;
+}
+
+/* Base styles — LVL dark-first design */
+body {
+  background-color: var(--color-lvl-black);
+  color: var(--color-lvl-white);
+  font-family: var(--font-body);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-lvl-carbon);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-lvl-slate);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-lvl-smoke);
+}
+
+/* Live pulse animation */
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-live-pulse {
+  animation: live-pulse 1.5s ease-in-out infinite;
+}
+
+/* Bid flash animation */
+@keyframes bid-flash {
+  0% { background-color: var(--color-lvl-yellow); }
+  100% { background-color: transparent; }
+}
+
+.animate-bid-flash {
+  animation: bid-flash 0.5s ease-out;
+}
