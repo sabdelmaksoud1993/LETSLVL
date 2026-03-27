@@ -210,7 +210,47 @@ export default function CheckoutPage() {
       });
 
       clearCart();
-      setOrderNumber((order as unknown as Record<string, unknown>).order_number as string ?? order.id);
+
+      const confirmedOrderNumber =
+        ((order as unknown as Record<string, unknown>).order_number as string) ??
+        order.id;
+
+      // Fire-and-forget: send order confirmation email
+      fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: user.email,
+          template: "order-confirmation",
+          data: {
+            orderNumber: confirmedOrderNumber,
+            orderDate: new Date().toLocaleDateString("en-AE", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            }),
+            items: orderItems.map((i) => ({
+              title: i.title,
+              quantity: i.quantity,
+              price: i.price,
+            })),
+            shippingAddress: {
+              fullName: shipping.fullName,
+              line1: shipping.line1,
+              line2: shipping.line2 || null,
+              city: shipping.city,
+              country: shipping.country,
+            },
+            subtotal,
+            shipping: shippingCost,
+            total,
+          },
+        }),
+      }).catch(() => {
+        // Silently ignore email failures — order is already placed
+      });
+
+      setOrderNumber(confirmedOrderNumber);
     } catch (err) {
       setOrderError(
         err instanceof Error ? err.message : "Failed to place order. Please try again."

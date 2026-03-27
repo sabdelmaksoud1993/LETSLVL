@@ -20,25 +20,52 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "LET'S LVL | Fashion, Merchandise & Live Auctions",
+  title: {
+    template: "%s | LET'S LVL",
+    default: "LET'S LVL | Fashion, Merchandise & Live Auctions",
+  },
   description:
-    "Dubai's boldest ecommerce destination for fashion, merchandise, and limited-edition retail. Shop, bid, and win — all live.",
+    "Dubai's boldest fashion marketplace. Shop streetwear, sneakers, trading cards and collectibles. Bid in live auctions and win limited drops — all from the MENA region.",
   keywords: [
     "fashion",
     "streetwear",
     "live auctions",
     "Dubai",
     "UAE",
+    "MENA",
     "sneakers",
     "trading cards",
     "limited edition",
+    "collectibles",
+    "ecommerce",
   ],
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://letslvl.com"),
   openGraph: {
     title: "LET'S LVL | Built for the Bold",
     description:
-      "Shop fashion, bid in live auctions, and win limited drops. Built in Dubai.",
+      "Shop fashion, bid in live auctions, and win limited drops. Dubai's boldest marketplace for streetwear, sneakers, and collectibles.",
     siteName: "LET'S LVL",
     type: "website",
+    locale: "en_AE",
+    images: [
+      {
+        url: "/og-default.png",
+        width: 1200,
+        height: 630,
+        alt: "LET'S LVL — Fashion, Merchandise & Live Auctions",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "LET'S LVL | Built for the Bold",
+    description:
+      "Shop fashion, bid in live auctions, and win limited drops. Built in Dubai.",
+    images: ["/og-default.png"],
+  },
+  manifest: "/manifest.json",
+  other: {
+    "theme-color": "#F5C518",
   },
 };
 

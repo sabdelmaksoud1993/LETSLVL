@@ -161,8 +161,34 @@ export default function ProductPage() {
     }
   }
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.title,
+    description: product.description,
+    image: product.images[0] ?? undefined,
+    brand: {
+      "@type": "Brand",
+      name: product.brand,
+    },
+    offers: {
+      "@type": "Offer",
+      price: product.price,
+      priceCurrency: product.currency,
+      availability:
+        product.inventory_count > 0
+          ? "https://schema.org/InStock"
+          : "https://schema.org/OutOfStock",
+      itemCondition: "https://schema.org/NewCondition",
+    },
+  };
+
   return (
     <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-16">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Breadcrumb */}
       <nav
         className="flex items-center gap-1.5 pt-6 pb-6 text-sm font-body"

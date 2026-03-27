@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "callback",
+            "command": "node -e \"const fs = require('fs'); try { const status = require('child_process').execSync('git -C /Users/sherifabdelmaksoud/LETSLVL status --porcelain', {encoding:'utf8'}).trim(); if (status.length > 0) { console.log('[Code Audit Reminder] There are uncommitted changes. Before committing, run the code-reviewer agent to audit all modified files for quality, security, and correctness.'); } } catch(e) {}\""
+          }
+        ]
+      }
+    ]
+  }
+}
