@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff, Mail, Lock, User, Phone, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase-browser";
+import { useAuth } from "@/lib/auth-context";
 
 const COUNTRIES = [
   { code: "AE", name: "UAE", dial: "+971" },
@@ -27,6 +30,18 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const router = useRouter();
+  const { user, loading } = useAuth();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!loading && user) {
+      router.push("/");
+    }
+  }, [user, loading, router]);
 
   const updateField = <K extends keyof typeof form>(
     key: K,
@@ -39,16 +54,92 @@ export default function RegisterPage() {
     form.confirmPassword.length === 0 ||
     form.password === form.confirmPassword;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const passwordLongEnough = form.password.length >= 6;
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.agreeTerms || !passwordsMatch) return;
+
+    if (!passwordLongEnough) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+
     setIsLoading(true);
-    // TODO: Integrate with auth provider
-    setTimeout(() => setIsLoading(false), 1500);
+    setError(null);
+
+    const supabase = createClient();
+    const { error: signUpError } = await supabase.auth.signUp({
+      email: form.email,
+      password: form.password,
+      options: {
+        data: {
+          full_name: form.fullName,
+          phone: form.phone,
+          country: form.country,
+        },
+      },
+    });
+
+    if (signUpError) {
+      setError(signUpError.message);
+      setIsLoading(false);
+      return;
+    }
+
+    setSuccess(true);
+    setIsLoading(false);
   };
 
   const inputClass =
     "w-full bg-lvl-carbon border border-lvl-slate rounded-lg py-3 pl-10 pr-4 text-lvl-white placeholder:text-lvl-smoke/50 font-body text-sm focus:outline-none focus:border-lvl-yellow transition-colors";
+
+  // Don't render form while checking auth state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-lvl-black flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-lvl-yellow border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (user) {
+    return null;
+  }
+
+  // Success state
+  if (success) {
+    return (
+      <div className="min-h-screen bg-lvl-black flex items-center justify-center px-4">
+        <div className="w-full max-w-md text-center">
+          <div className="text-center mb-8">
+            <h1 className="font-display text-4xl font-bold tracking-wider">
+              LET&apos;S <span className="text-lvl-yellow">LVL</span>
+            </h1>
+          </div>
+          <div className="bg-lvl-carbon rounded-2xl p-8 border border-lvl-slate/30">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/10 flex items-center justify-center">
+              <Mail className="w-8 h-8 text-green-400" />
+            </div>
+            <h2 className="font-display text-2xl font-bold uppercase tracking-wider mb-2">
+              Check Your Email
+            </h2>
+            <p className="text-lvl-smoke font-body text-sm mb-6">
+              We sent a verification link to{" "}
+              <span className="text-lvl-white font-medium">{form.email}</span>.
+              Click the link to activate your account.
+            </p>
+            <Link
+              href="/auth/login"
+              className="inline-block w-full bg-lvl-yellow text-lvl-black font-display text-lg uppercase tracking-widest py-3 rounded-lg font-bold hover:opacity-90 transition-opacity"
+            >
+              GO TO SIGN IN
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-lvl-black flex items-center justify-center px-4 py-12">
@@ -65,6 +156,13 @@ export default function RegisterPage() {
 
         {/* Card */}
         <div className="bg-lvl-carbon rounded-2xl p-8 border border-lvl-slate/30">
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm font-body">
+              {error}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Full Name */}
             <div>
@@ -174,10 +272,10 @@ export default function RegisterPage() {
                   id="password"
                   type={showPassword ? "text" : "password"}
                   required
-                  minLength={8}
+                  minLength={6}
                   value={form.password}
                   onChange={(e) => updateField("password", e.target.value)}
-                  placeholder="Min 8 characters"
+                  placeholder="Min 6 characters"
                   className={cn(inputClass, "pr-12")}
                 />
                 <button
@@ -193,6 +291,11 @@ export default function RegisterPage() {
                   )}
                 </button>
               </div>
+              {form.password.length > 0 && !passwordLongEnough && (
+                <p className="text-red-400 text-xs mt-1 font-body">
+                  Password must be at least 6 characters
+                </p>
+              )}
             </div>
 
             {/* Confirm Password */}
@@ -217,7 +320,7 @@ export default function RegisterPage() {
                   className={cn(
                     inputClass,
                     "pr-12",
-                    !passwordsMatch && "border-lvl-error"
+                    !passwordsMatch && "border-red-500"
                   )}
                 />
                 <button
@@ -236,7 +339,7 @@ export default function RegisterPage() {
                 </button>
               </div>
               {!passwordsMatch && (
-                <p className="text-lvl-error text-xs mt-1 font-body">
+                <p className="text-red-400 text-xs mt-1 font-body">
                   Passwords do not match
                 </p>
               )}

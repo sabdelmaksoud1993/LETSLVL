@@ -1,10 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { Search, Heart, ShoppingBag, User, Menu, X } from "lucide-react";
+import {
+  Search,
+  Heart,
+  ShoppingBag,
+  User,
+  Menu,
+  X,
+  LogOut,
+  LayoutDashboard,
+  ChevronDown,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getCartCount } from "@/lib/cart-store";
+import { useAuth } from "@/lib/auth-context";
 
 const NAV_LINKS = [
   { label: "Shop", href: "/" },
@@ -12,9 +23,106 @@ const NAV_LINKS = [
   { label: "Drops", href: "/category/streetwear" },
 ] as const;
 
+function UserMenu() {
+  const { user, profile, signOut } = useAuth();
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [open]);
+
+  if (!user) return null;
+
+  const displayName = profile?.full_name || user.email || "User";
+  const initial = displayName.charAt(0).toUpperCase();
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex items-center gap-2 rounded-lg px-2 h-9 text-lvl-smoke hover:text-lvl-white hover:bg-lvl-slate/50 transition-colors"
+        aria-expanded={open}
+        aria-haspopup="true"
+        aria-label="User menu"
+      >
+        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-lvl-yellow text-lvl-black font-display text-sm font-bold">
+          {initial}
+        </span>
+        <ChevronDown
+          size={14}
+          className={cn(
+            "transition-transform",
+            open && "rotate-180"
+          )}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-52 rounded-xl bg-lvl-carbon border border-lvl-slate/50 shadow-xl py-1 z-50">
+          {/* User info */}
+          <div className="px-4 py-3 border-b border-lvl-slate/30">
+            <p className="font-body text-sm text-lvl-white font-medium truncate">
+              {displayName}
+            </p>
+            <p className="font-body text-xs text-lvl-smoke truncate">
+              {user.email}
+            </p>
+          </div>
+
+          <Link
+            href="/account"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-3 px-4 py-2.5 text-sm font-body text-lvl-smoke hover:text-lvl-white hover:bg-lvl-slate/30 transition-colors"
+          >
+            <User size={16} />
+            My Account
+          </Link>
+
+          <Link
+            href="/seller/dashboard"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-3 px-4 py-2.5 text-sm font-body text-lvl-smoke hover:text-lvl-white hover:bg-lvl-slate/30 transition-colors"
+          >
+            <LayoutDashboard size={16} />
+            Seller Dashboard
+          </Link>
+
+          <div className="border-t border-lvl-slate/30 mt-1">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                signOut();
+              }}
+              className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-body text-red-400 hover:text-red-300 hover:bg-lvl-slate/30 transition-colors"
+            >
+              <LogOut size={16} />
+              Sign Out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Header() {
   const [cartCount, setCartCount] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, loading, signOut } = useAuth();
 
   const syncCartCount = useCallback(() => {
     setCartCount(getCartCount());
@@ -97,19 +205,29 @@ function Header() {
             )}
           </Link>
 
-          <Link
-            href="/auth/login"
-            className="hidden lg:flex items-center justify-center px-4 h-9 rounded-lg text-sm font-display uppercase tracking-wider text-lvl-smoke hover:text-lvl-white border border-lvl-slate hover:border-lvl-smoke transition-colors"
-          >
-            Sign In
-          </Link>
-
-          <Link
-            href="/auth/register"
-            className="hidden lg:flex items-center justify-center px-4 h-9 rounded-lg text-sm font-display uppercase tracking-wider bg-lvl-yellow text-lvl-black font-bold hover:bg-lvl-yellow/90 transition-colors"
-          >
-            Sign Up
-          </Link>
+          {/* Desktop Auth Buttons / User Menu */}
+          {!loading && (
+            <div className="hidden lg:flex items-center gap-1">
+              {user ? (
+                <UserMenu />
+              ) : (
+                <>
+                  <Link
+                    href="/auth/login"
+                    className="flex items-center justify-center px-4 h-9 rounded-lg text-sm font-display uppercase tracking-wider text-lvl-smoke hover:text-lvl-white border border-lvl-slate hover:border-lvl-smoke transition-colors"
+                  >
+                    Sign In
+                  </Link>
+                  <Link
+                    href="/auth/register"
+                    className="flex items-center justify-center px-4 h-9 rounded-lg text-sm font-display uppercase tracking-wider bg-lvl-yellow text-lvl-black font-bold hover:bg-lvl-yellow/90 transition-colors"
+                  >
+                    Sign Up
+                  </Link>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Mobile Menu Toggle */}
           <button
@@ -139,20 +257,54 @@ function Header() {
               </Link>
             ))}
             <div className="flex flex-col gap-3 pt-6">
-              <Link
-                href="/auth/login"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center justify-center py-3 rounded-lg border border-lvl-slate text-lvl-white font-display uppercase tracking-wider hover:border-lvl-yellow transition-colors"
-              >
-                Sign In
-              </Link>
-              <Link
-                href="/auth/register"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center justify-center py-3 rounded-lg bg-lvl-yellow text-lvl-black font-display uppercase tracking-wider font-bold hover:bg-lvl-yellow/90 transition-colors"
-              >
-                Sign Up
-              </Link>
+              {!loading && user ? (
+                <>
+                  <Link
+                    href="/account"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 py-3 rounded-lg border border-lvl-slate text-lvl-white font-display uppercase tracking-wider hover:border-lvl-yellow transition-colors justify-center"
+                  >
+                    <User size={18} />
+                    My Account
+                  </Link>
+                  <Link
+                    href="/seller/dashboard"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 py-3 rounded-lg border border-lvl-slate text-lvl-white font-display uppercase tracking-wider hover:border-lvl-yellow transition-colors justify-center"
+                  >
+                    <LayoutDashboard size={18} />
+                    Seller Dashboard
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      signOut();
+                    }}
+                    className="flex items-center gap-3 py-3 rounded-lg border border-red-500/30 text-red-400 font-display uppercase tracking-wider hover:border-red-500 transition-colors justify-center"
+                  >
+                    <LogOut size={18} />
+                    Sign Out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/auth/login"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center justify-center py-3 rounded-lg border border-lvl-slate text-lvl-white font-display uppercase tracking-wider hover:border-lvl-yellow transition-colors"
+                  >
+                    Sign In
+                  </Link>
+                  <Link
+                    href="/auth/register"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center justify-center py-3 rounded-lg bg-lvl-yellow text-lvl-black font-display uppercase tracking-wider font-bold hover:bg-lvl-yellow/90 transition-colors"
+                  >
+                    Sign Up
+                  </Link>
+                </>
+              )}
             </div>
           </nav>
         </div>

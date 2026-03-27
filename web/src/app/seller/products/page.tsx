@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -12,74 +12,55 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { cn, formatPrice } from "@/lib/utils";
+import {
+  getSellerProducts,
+  deleteSellerProduct,
+  type SellerProduct,
+} from "@/lib/seller-store";
 
-type ProductStatus = "active" | "draft";
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+type StatusFilter = "all" | "active" | "draft" | "archived";
 type SortKey = "newest" | "price" | "stock";
 
-interface Product {
-  readonly id: string;
-  readonly name: string;
-  readonly price: number;
-  readonly stock: number;
-  readonly status: ProductStatus;
-  readonly createdAt: string;
-}
-
-const MOCK_PRODUCTS: readonly Product[] = [
-  {
-    id: "p1",
-    name: "Pokemon Scarlet & Violet Booster Box",
-    price: 850,
-    stock: 12,
-    status: "active",
-    createdAt: "2026-03-20",
-  },
-  {
-    id: "p2",
-    name: "One Piece TCG Romance Dawn Display",
-    price: 2100,
-    stock: 5,
-    status: "active",
-    createdAt: "2026-03-15",
-  },
-  {
-    id: "p3",
-    name: "Yu-Gi-Oh! Structure Deck: Legend of the Crystal Beasts",
-    price: 180,
-    stock: 30,
-    status: "active",
-    createdAt: "2026-03-10",
-  },
-  {
-    id: "p4",
-    name: "Digimon Card Game BT-16 Booster",
-    price: 320,
-    stock: 18,
-    status: "active",
-    createdAt: "2026-03-05",
-  },
-  {
-    id: "p5",
-    name: "Dragon Ball Super Card Game - Zenkai Series Set 7",
-    price: 95,
-    stock: 0,
-    status: "draft",
-    createdAt: "2026-02-28",
-  },
-  {
-    id: "p6",
-    name: "Magic: The Gathering Foundations Play Booster",
-    price: 450,
-    stock: 8,
-    status: "active",
-    createdAt: "2026-02-20",
-  },
-];
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 export default function SellerProductsPage() {
+  const [products, setProducts] = useState<readonly SellerProduct[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortBy, setSortBy] = useState<SortKey>("newest");
   const [showSortMenu, setShowSortMenu] = useState(false);
+
+  // ---- load & listen for changes --------------------------------------------
+
+  const loadProducts = useCallback(() => {
+    setProducts(getSellerProducts());
+  }, []);
+
+  useEffect(() => {
+    loadProducts();
+
+    const handler = () => loadProducts();
+    window.addEventListener("seller-products-updated", handler);
+    return () => window.removeEventListener("seller-products-updated", handler);
+  }, [loadProducts]);
+
+  // ---- counts per status ----------------------------------------------------
+
+  const counts = useMemo(() => {
+    const all = products.length;
+    const active = products.filter((p) => p.status === "active").length;
+    const draft = products.filter((p) => p.status === "draft").length;
+    const archived = products.filter((p) => p.status === "archived").length;
+    return { all, active, draft, archived };
+  }, [products]);
+
+  // ---- filter & sort --------------------------------------------------------
 
   const sortLabels: Record<SortKey, string> = {
     newest: "Newest",
@@ -89,28 +70,58 @@ export default function SellerProductsPage() {
 
   const filtered = useMemo(() => {
     const query = searchQuery.toLowerCase();
-    const results = MOCK_PRODUCTS.filter((p) =>
-      p.name.toLowerCase().includes(query)
-    );
+
+    const results = products.filter((p) => {
+      const matchesSearch = p.title.toLowerCase().includes(query);
+      const matchesStatus =
+        statusFilter === "all" ? true : p.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
 
     const sorted = [...results];
     switch (sortBy) {
       case "newest":
         sorted.sort(
           (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            new Date(b.created_at).getTime() -
+            new Date(a.created_at).getTime()
         );
         break;
       case "price":
         sorted.sort((a, b) => b.price - a.price);
         break;
       case "stock":
-        sorted.sort((a, b) => b.stock - a.stock);
+        sorted.sort((a, b) => b.inventory_count - a.inventory_count);
         break;
     }
 
     return sorted;
-  }, [searchQuery, sortBy]);
+  }, [products, searchQuery, statusFilter, sortBy]);
+
+  // ---- archive handler ------------------------------------------------------
+
+  const handleArchive = useCallback(
+    (id: string, name: string) => {
+      if (window.confirm(`Archive "${name}"? It will no longer be visible to buyers.`)) {
+        deleteSellerProduct(id);
+        loadProducts();
+      }
+    },
+    [loadProducts]
+  );
+
+  // ---- status tab config ----------------------------------------------------
+
+  const STATUS_TABS: { key: StatusFilter; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "active", label: "Active" },
+    { key: "draft", label: "Draft" },
+    { key: "archived", label: "Archived" },
+  ];
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
 
   return (
     <div className="min-h-screen bg-lvl-black px-4 py-8 max-w-4xl mx-auto">
@@ -135,6 +146,35 @@ export default function SellerProductsPage() {
           <Plus className="w-4 h-4" />
           Add Product
         </Link>
+      </div>
+
+      {/* Status Tabs */}
+      <div className="flex gap-1 mb-4 bg-lvl-carbon rounded-lg p-1">
+        {STATUS_TABS.map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setStatusFilter(key)}
+            className={cn(
+              "flex-1 py-2 rounded-md text-sm font-display font-bold tracking-wider transition-colors",
+              statusFilter === key
+                ? "bg-lvl-yellow text-lvl-black"
+                : "text-lvl-smoke hover:text-lvl-white"
+            )}
+          >
+            {label}{" "}
+            <span
+              className={cn(
+                "ml-1 text-xs",
+                statusFilter === key
+                  ? "text-lvl-black/60"
+                  : "text-lvl-smoke/60"
+              )}
+            >
+              {counts[key]}
+            </span>
+          </button>
+        ))}
       </div>
 
       {/* Search & Sort */}
@@ -194,7 +234,9 @@ export default function SellerProductsPage() {
             No products found
           </p>
           <p className="text-lvl-smoke text-sm font-body">
-            Try a different search term
+            {statusFilter !== "all"
+              ? `No ${statusFilter} products match your search`
+              : "Try a different search term"}
           </p>
         </div>
       ) : (
@@ -204,52 +246,84 @@ export default function SellerProductsPage() {
               key={product.id}
               className="bg-lvl-carbon rounded-xl p-4 flex items-center gap-4"
             >
-              {/* Thumbnail placeholder */}
-              <div className="w-14 h-14 rounded-lg bg-lvl-slate flex items-center justify-center shrink-0">
-                <Package className="w-6 h-6 text-lvl-smoke" />
+              {/* Thumbnail */}
+              <div className="w-14 h-14 rounded-lg bg-lvl-slate flex items-center justify-center shrink-0 overflow-hidden">
+                {product.images.length > 0 && product.images[0] ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={product.images[0]}
+                    alt={product.title}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                      const parent = (e.target as HTMLImageElement)
+                        .parentElement;
+                      if (parent) {
+                        parent.innerHTML =
+                          '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 text-lvl-smoke"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>';
+                      }
+                    }}
+                  />
+                ) : (
+                  <Package className="w-6 h-6 text-lvl-smoke" />
+                )}
               </div>
 
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-body font-medium truncate">
-                  {product.name}
+                  {product.title}
                 </p>
                 <div className="flex items-center gap-3 mt-1">
                   <span className="text-lvl-yellow text-sm font-display font-bold">
-                    {formatPrice(product.price)}
+                    {formatPrice(product.price, product.currency)}
                   </span>
                   <span className="text-lvl-smoke text-xs font-body">
-                    {product.stock} in stock
+                    {product.inventory_count} in stock
                   </span>
                   <span
                     className={cn(
                       "inline-block px-2 py-0.5 rounded-full text-xs font-display font-bold tracking-wider border",
                       product.status === "active"
                         ? "bg-green-500/20 text-green-400 border-green-500/40"
-                        : "bg-lvl-slate/50 text-lvl-smoke border-lvl-slate"
+                        : product.status === "draft"
+                          ? "bg-lvl-slate/50 text-lvl-smoke border-lvl-slate"
+                          : "bg-red-500/20 text-red-400 border-red-500/40"
                     )}
                   >
-                    {product.status === "active" ? "Active" : "Draft"}
+                    {product.status === "active"
+                      ? "Active"
+                      : product.status === "draft"
+                        ? "Draft"
+                        : "Archived"}
                   </span>
+                  {product.is_live_exclusive && (
+                    <span className="inline-block px-2 py-0.5 rounded-full text-xs font-display font-bold tracking-wider bg-lvl-yellow/20 text-lvl-yellow border border-lvl-yellow/40">
+                      LIVE
+                    </span>
+                  )}
                 </div>
               </div>
 
               {/* Actions */}
               <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
+                <Link
+                  href={`/seller/products/${product.id}/edit`}
                   className="w-9 h-9 rounded-lg bg-lvl-slate flex items-center justify-center hover:bg-lvl-yellow/20 transition-colors"
-                  aria-label={`Edit ${product.name}`}
+                  aria-label={`Edit ${product.title}`}
                 >
                   <Edit className="w-4 h-4 text-lvl-smoke" />
-                </button>
-                <button
-                  type="button"
-                  className="w-9 h-9 rounded-lg bg-lvl-slate flex items-center justify-center hover:bg-lvl-error/20 transition-colors"
-                  aria-label={`Archive ${product.name}`}
-                >
-                  <Archive className="w-4 h-4 text-lvl-smoke" />
-                </button>
+                </Link>
+                {product.status !== "archived" && (
+                  <button
+                    type="button"
+                    onClick={() => handleArchive(product.id, product.title)}
+                    className="w-9 h-9 rounded-lg bg-lvl-slate flex items-center justify-center hover:bg-red-500/20 transition-colors"
+                    aria-label={`Archive ${product.title}`}
+                  >
+                    <Archive className="w-4 h-4 text-lvl-smoke" />
+                  </button>
+                )}
               </div>
             </div>
           ))}
