@@ -152,7 +152,7 @@ export default function SellerAnalyticsPage() {
   const topProductRevenue = TOP_PRODUCTS[0].revenue;
 
   return (
-    <div className="min-h-screen bg-lvl-black px-4 py-8 max-w-6xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       {/* Header */}
       <div className="mb-8">
         <Link

@@ -12,6 +12,7 @@ import Link from "next/link";
 import { ArrowLeft, X, Plus, Image as ImageIcon, LogIn } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getProduct, updateProduct, archiveProduct, getCategories } from "@/lib/supabase-data";
+import { ImageUploader } from "@/components/seller/image-uploader";
 import { useAuth } from "@/lib/auth-context";
 import type { Category } from "@/types/database";
 
@@ -300,7 +301,7 @@ export default function EditProductPage() {
 
   if (!authLoading && !user) {
     return (
-      <div className="min-h-screen bg-lvl-black px-4 py-8 max-w-3xl mx-auto text-center">
+      <div className="max-w-3xl mx-auto text-center">
         <LogIn className="mx-auto h-16 w-16 text-lvl-slate" />
         <h1 className="mt-6 font-display text-3xl font-bold tracking-wider">
           SIGN IN TO EDIT <span className="text-lvl-yellow">PRODUCTS</span>
@@ -319,7 +320,7 @@ export default function EditProductPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-lvl-black px-4 py-8 max-w-3xl mx-auto">
+      <div className="max-w-3xl mx-auto">
         <div className="space-y-6 animate-pulse">
           <div className="h-4 w-32 rounded bg-lvl-slate/50" />
           <div className="h-8 w-48 rounded bg-lvl-slate/50" />
@@ -332,7 +333,7 @@ export default function EditProductPage() {
 
   if (notFound) {
     return (
-      <div className="min-h-screen bg-lvl-black px-4 py-8 max-w-3xl mx-auto">
+      <div className="max-w-3xl mx-auto">
         <Link
           href="/seller/products"
           className="inline-flex items-center gap-2 text-lvl-smoke hover:text-lvl-white transition-colors mb-6 font-body text-sm"
@@ -363,7 +364,7 @@ export default function EditProductPage() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="min-h-screen bg-lvl-black px-4 py-8 max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto">
       {/* Back */}
       <Link
         href="/seller/products"

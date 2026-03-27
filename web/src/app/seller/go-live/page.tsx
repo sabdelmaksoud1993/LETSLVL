@@ -194,7 +194,7 @@ export default function GoLivePage() {
     sellerProducts.length > 0 ? sellerProducts : [];
 
   return (
-    <div className="min-h-screen bg-lvl-black px-4 py-8 max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto">
       {/* Back */}
       <Link
         href="/seller/dashboard"

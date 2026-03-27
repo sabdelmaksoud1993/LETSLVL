@@ -90,7 +90,7 @@ function StatusDot({ status }: { status: string }) {
 
 export default function SellerDashboardPage() {
   return (
-    <div className="min-h-screen bg-lvl-black px-4 py-8 max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <h1 className="font-display text-3xl font-bold tracking-wider">

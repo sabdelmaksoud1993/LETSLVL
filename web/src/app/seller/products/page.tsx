@@ -132,7 +132,7 @@ export default function SellerProductsPage() {
 
   if (!authLoading && !user) {
     return (
-      <div className="min-h-screen bg-lvl-black px-4 py-8 max-w-4xl mx-auto text-center">
+      <div className="max-w-4xl mx-auto text-center">
         <LogIn className="mx-auto h-16 w-16 text-lvl-slate" />
         <h1 className="mt-6 font-display text-3xl font-bold tracking-wider">
           SIGN IN TO MANAGE <span className="text-lvl-yellow">PRODUCTS</span>
@@ -155,7 +155,7 @@ export default function SellerProductsPage() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="min-h-screen bg-lvl-black px-4 py-8 max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto">
       {/* Back */}
       <Link
         href="/seller/dashboard"

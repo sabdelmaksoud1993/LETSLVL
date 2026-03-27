@@ -8,8 +8,9 @@ import { BottomNav } from "@/components/layout/bottom-nav";
 export function SiteShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isAdmin = pathname.startsWith("/admin");
+  const isSeller = pathname.startsWith("/seller");
 
-  if (isAdmin) {
+  if (isAdmin || isSeller) {
     return <>{children}</>;
   }
 

@@ -7,6 +7,7 @@ import { ArrowLeft, X, Plus, Image as ImageIcon, LogIn } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createProduct, getCategories } from "@/lib/supabase-data";
 import { useAuth } from "@/lib/auth-context";
+import { ImageUploader } from "@/components/seller/image-uploader";
 import type { Category } from "@/types/database";
 
 // ---------------------------------------------------------------------------
@@ -58,8 +59,8 @@ export default function AddProductPage() {
   const [colors, setColors] = useState<readonly string[]>([]);
   const [colorInput, setColorInput] = useState("");
 
-  // Images (up to 5 URLs)
-  const [images, setImages] = useState<readonly string[]>([""]);
+  // Images (up to 5 — uploaded via drag-and-drop)
+  const [images, setImages] = useState<string[]>([]);
 
   // Options
   const [tags, setTags] = useState<readonly string[]>([]);
@@ -256,7 +257,7 @@ export default function AddProductPage() {
 
   if (!authLoading && !user) {
     return (
-      <div className="min-h-screen bg-lvl-black px-4 py-8 max-w-3xl mx-auto text-center">
+      <div className="max-w-3xl mx-auto text-center">
         <LogIn className="mx-auto h-16 w-16 text-lvl-slate" />
         <h1 className="mt-6 font-display text-3xl font-bold tracking-wider">
           SIGN IN TO ADD <span className="text-lvl-yellow">PRODUCTS</span>
@@ -276,7 +277,7 @@ export default function AddProductPage() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="min-h-screen bg-lvl-black px-4 py-8 max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto">
       {/* Back */}
       <Link
         href="/seller/products"
@@ -582,61 +583,13 @@ export default function AddProductPage() {
             IMAGES
           </h2>
           <p className="text-lvl-smoke text-xs font-body mb-4">
-            Add up to 5 image URLs. Paste links from Unsplash, Imgur, etc.
+            Drag and drop up to 5 images, or click to browse. Supports JPEG, PNG, WebP (max 5MB each).
           </p>
-
-          <div className="space-y-3">
-            {images.map((url, i) => (
-              <div key={i} className="flex items-start gap-3">
-                {/* Preview */}
-                <div className="w-14 h-14 rounded-lg bg-lvl-slate flex items-center justify-center shrink-0 overflow-hidden">
-                  {url.trim() ? (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src={url}
-                      alt={`Preview ${i + 1}`}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                      }}
-                    />
-                  ) : (
-                    <ImageIcon className="w-5 h-5 text-lvl-smoke" />
-                  )}
-                </div>
-
-                <input
-                  type="text"
-                  value={url}
-                  onChange={(e) => updateImage(i, e.target.value)}
-                  placeholder="https://..."
-                  className={cn(INPUT_CLS, "flex-1")}
-                />
-
-                {images.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeImageSlot(i)}
-                    className="mt-2 text-lvl-smoke hover:text-red-400 transition-colors"
-                    aria-label="Remove image"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {images.length < 5 && (
-            <button
-              type="button"
-              onClick={addImageSlot}
-              className="mt-3 inline-flex items-center gap-1.5 text-lvl-yellow text-sm font-body hover:opacity-80 transition-opacity"
-            >
-              <Plus className="w-4 h-4" />
-              Add another image
-            </button>
-          )}
+          <ImageUploader
+            images={images}
+            onChange={(newImages) => setImages(newImages)}
+            maxImages={5}
+          />
         </section>
 
         {/* ── Options ──────────────────────────────────────────────────────── */}
